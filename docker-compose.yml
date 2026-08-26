@@ -1,0 +1,12 @@
+services:
+  randmail:
+    build: .
+    image: raidmail
+    container_name: randmail
+    ports:
+      - "9012:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
