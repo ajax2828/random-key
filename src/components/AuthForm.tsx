@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { localApiClient } from '@/utils/supabase/client';
 
 interface AuthFormProps {
   type: 'login' | 'register';
@@ -18,7 +18,6 @@ export default function AuthForm({ type }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
-  const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,90 +27,31 @@ export default function AuthForm({ type }: AuthFormProps) {
 
     try {
       if (type === 'login') {
-        // 1. Authenticate with Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        // Authenticate with local API
+        const { user, error: authError } = await localApiClient.signIn(email, password);
 
         if (authError) {
-          if (authError.message.includes('Invalid login credentials')) {
-            throw new Error('Email atau password salah. Jika belum daftar, silakan Register terlebih dahulu.');
-          } else if (authError.message.includes('Email not confirmed')) {
-            throw new Error('Email belum dikonfirmasi. Silakan matikan "Confirm email" di Supabase Dashboard -> Authentication -> Providers -> Email.');
-          }
-          throw authError;
+          throw new Error(authError);
         }
 
-        if (authData.user) {
-          // 2. Validate against public.users table in Supabase (if table exists)
-          try {
-            const { data: userProfile } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', authData.user.id)
-              .maybeSingle();
-
-            if (!userProfile) {
-              await supabase.from('users').upsert({
-                id: authData.user.id,
-                email: authData.user.email!,
-                full_name: authData.user.user_metadata?.full_name || email.split('@')[0],
-                status: 'active',
-                role: 'user',
-              });
-            } else if (userProfile.status === 'blocked' || userProfile.status === 'inactive') {
-              await supabase.auth.signOut();
-              throw new Error(`Akun Anda di-status '${userProfile.status}'. Hubungi admin.`);
-            }
-          } catch (profileErr) {
-            console.warn('Public users table check skipped/error:', profileErr);
-          }
+        if (user) {
+          router.push('/dashboard');
+          router.refresh();
         }
-
-        router.push('/dashboard');
-        router.refresh();
       } else {
-        // 1. Register with Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName || email.split('@')[0],
-            },
-          },
-        });
+        // Register with local API
+        const { user, error: authError } = await localApiClient.signUp(email, password, fullName);
 
         if (authError) {
-          if (authError.message.includes('rate limit')) {
-            throw new Error('Supabase Email Rate Limit tercapai! Silakan matikan "Confirm email" di Dashboard Supabase (Authentication -> Providers -> Email -> Confirm Email = OFF).');
-          }
-          throw authError;
+          throw new Error(authError);
         }
 
-        // Check if user session was created immediately (meaning email confirmation is OFF)
-        if (authData.session) {
-          // Profile table sync
-          try {
-            await supabase.from('users').upsert({
-              id: authData.user!.id,
-              email: authData.user!.email!,
-              full_name: fullName || email.split('@')[0],
-              role: 'user',
-              status: 'active',
-            });
-          } catch (e) {
-            console.warn('Users table sync warning:', e);
-          }
-
+        if (user) {
           setSuccess('Pendaftaran berhasil! Mengalihkan ke dashboard...');
           setTimeout(() => {
             router.push('/dashboard');
             router.refresh();
           }, 1500);
-        } else if (authData.user) {
-          setSuccess('Pendaftaran berhasil! Jika tombol "Confirm Email" aktif di Supabase Anda, cek inbox email atau matikan "Confirm email" di Supabase Dashboard.');
         }
       }
     } catch (err: any) {
@@ -129,7 +69,7 @@ export default function AuthForm({ type }: AuthFormProps) {
           <p>
             {type === 'login'
               ? 'Masukkan email & password untuk masuk ke RandMail'
-              : 'Daftar akun baru di RandMail & Supabase'}
+              : 'Daftar akun baru di RandMail'}
           </p>
         </div>
 

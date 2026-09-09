@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient } from '@/utils/supabase/client';
 
 interface SecureGenerateModalProps {
   isOpen: boolean;
@@ -33,7 +32,6 @@ export default function SecureGenerateModal({
   const [isVerifying, setIsVerifying] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const supabase = createClient();
 
   const drawCaptcha = useCallback((text: string) => {
     const canvas = canvasRef.current;
@@ -130,20 +128,26 @@ export default function SecureGenerateModal({
   const handleVerifyPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!passwordInput) { setErrorMsg('Masukkan password akun login Anda!'); return; }
+    if (!passwordInput) {
+      setErrorMsg('Masukkan password akun login Anda!');
+      return;
+    }
 
     setIsVerifying(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !user.email) { setStep(2); return; }
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: passwordInput,
+      // Re-authenticate with local API to verify the password
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: (window as any)._currentUserEmail || '',
+          password: passwordInput,
+        }),
       });
 
-      if (error) {
-        setErrorMsg('Password akun login salah!');
+      if (!res.ok) {
+        const data = await res.json();
+        setErrorMsg(data.error || 'Password akun login salah!');
       } else {
         setStep(2);
         setErrorMsg(null);
@@ -245,6 +249,7 @@ export default function SecureGenerateModal({
               <p className="step-desc">
                 Ketik kode captcha berikut untuk mengonfirmasi pembuatan password baru.
               </p>
+
               <div className="captcha-container">
                 <canvas ref={canvasRef} width={280} height={70} className="captcha-canvas" />
                 <button type="button" className="captcha-refresh-btn" onClick={handleRefreshCaptcha} title="Refresh">
@@ -254,6 +259,7 @@ export default function SecureGenerateModal({
                   </svg>
                 </button>
               </div>
+
               <div className="form-group">
                 <label htmlFor="gen-modal-captcha">Masukkan Kode Captcha:</label>
                 <input
@@ -269,6 +275,7 @@ export default function SecureGenerateModal({
                   className="captcha-input"
                 />
               </div>
+
               <div className="modal-footer-actions">
                 <button type="button" className="btn-modal-cancel" onClick={() => { setStep(1); setErrorMsg(null); }}>← Kembali</button>
                 <button type="submit" className="btn-modal-generate" disabled={isVerifying}>

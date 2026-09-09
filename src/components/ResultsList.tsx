@@ -19,7 +19,7 @@ export default function ResultsList({ pairs, onCopy, onDelete }: ResultsListProp
           </svg>
         </div>
         <p>Click <strong>Generate & Save</strong> to create email & password pairs</p>
-        <span style={{ fontSize: '0.78rem' }}>Results will automatically sync with Supabase database</span>
+        <span style={{ fontSize: '0.78rem' }}>Results will automatically sync with local database</span>
       </div>
     );
   }

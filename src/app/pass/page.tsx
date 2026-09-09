@@ -5,7 +5,7 @@ import { PasswordOptions, generatePassword } from '@/lib/generators';
 import Toast from '@/components/Toast';
 import SecureGenerateModal from '@/components/SecureGenerateModal';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
-import { createClient } from '@/utils/supabase/client';
+import { localApiClient } from '@/utils/supabase/client';
 
 interface SavedPasswordItem {
   id: string;
@@ -39,38 +39,29 @@ export default function GeneratPassPage() {
   const [isGenModalOpen, setIsGenModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string; mode: 'single' | 'all' } | null>(null);
 
-  const supabase = createClient();
-
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2200);
   }, []);
 
-  // Fetch passwords from Supabase password_vault
-  const loadVaultFromSupabase = useCallback(async () => {
+  // Fetch passwords from local API (password_vault)
+  const loadVault = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from('password_vault')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.warn('Supabase password_vault fetch error:', error.message);
-      } else if (data) {
-        setResults(data as SavedPasswordItem[]);
+      const res = await fetch('/api/vault');
+      if (!res.ok) {
+        console.warn('Vault fetch notice:', res.status);
+        return;
       }
+      const { data } = await res.json() as { data: SavedPasswordItem[] };
+      setResults(data || []);
     } catch (err) {
       console.error('Error loading vault:', err);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    loadVaultFromSupabase();
-  }, [loadVaultFromSupabase]);
+    loadVault();
+  }, [loadVault]);
 
   // Evaluate password strength
   const getStrengthLabel = (opts: PasswordOptions): string => {
@@ -100,13 +91,12 @@ export default function GeneratPassPage() {
   const handleConfirmedGenerate = async () => {
     setIsGenerating(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await localApiClient.getUser();
       const generatedPass = generatePassword(passOpts);
       const strength = getStrengthLabel(passOpts);
 
       if (user) {
         const toInsert = {
-          user_id: user.id,
           label: labelInput.trim() || null,
           password: generatedPass,
           length: passOpts.length,
@@ -117,13 +107,35 @@ export default function GeneratPassPage() {
           use_symbols: passOpts.useSymbols,
         };
 
-        const { data, error } = await supabase
-          .from('password_vault')
-          .insert([toInsert])
-          .select('*');
-
-        if (error) {
-          console.warn('Supabase insert notice (fallback local):', error.message);
+        try {
+          const res = await fetch('/api/vault', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toInsert),
+          });
+          const result = await res.json();
+          if (res.ok && result.data && result.data[0]) {
+            setResults((prev) => [result.data[0], ...prev]);
+            showToast('Password baru berhasil dibuat & tersimpan di database!');
+          } else {
+            // Fallback to local
+            const fallbackItem: SavedPasswordItem = {
+              id: `local-${Date.now()}`,
+              label: labelInput.trim() || 'Password Baru',
+              password: generatedPass,
+              length: passOpts.length,
+              strength: strength,
+              use_upper: passOpts.useUpper,
+              use_lower: passOpts.useLower,
+              use_numbers: passOpts.useNumbers,
+              use_symbols: passOpts.useSymbols,
+              created_at: new Date().toISOString(),
+            };
+            setResults((prev) => [fallbackItem, ...prev]);
+            showToast('Password dibuat secara lokal! (Notice DB)');
+          }
+        } catch (err) {
+          console.warn('Vault insert fallback (local):', err);
           const fallbackItem: SavedPasswordItem = {
             id: `local-${Date.now()}`,
             label: labelInput.trim() || 'Password Baru',
@@ -138,9 +150,6 @@ export default function GeneratPassPage() {
           };
           setResults((prev) => [fallbackItem, ...prev]);
           showToast('Password dibuat secara lokal! (Notice DB)');
-        } else if (data && data.length > 0) {
-          setResults((prev) => [data[0] as SavedPasswordItem, ...prev]);
-          showToast('Password baru berhasil dibuat & tersimpan di Supabase!');
         }
       } else {
         const localItem: SavedPasswordItem = {
@@ -213,16 +222,13 @@ export default function GeneratPassPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('password_vault').delete().eq('user_id', user.id);
-      }
+      await fetch('/api/vault?all=true', { method: 'DELETE' });
       setResults([]);
       showToast('Semua password di vault berhasil dihapus!');
     } else {
       const { id } = deleteTarget;
       if (!id.startsWith('local-')) {
-        await supabase.from('password_vault').delete().eq('id', id);
+        await fetch(`/api/vault?id=${id}`, { method: 'DELETE' });
       }
       setResults((prev) => prev.filter((item) => item.id !== id));
       showToast('Password berhasil dihapus!');
@@ -242,13 +248,13 @@ export default function GeneratPassPage() {
           </div>
           <div>
             <h2 className="page-hero-title">GeneratPass</h2>
-            <p className="page-hero-sub">Generator Password Tunggal (1 per 1) dengan Verifikasi 2-Langkah & Supabase Vault</p>
+            <p className="page-hero-sub">Generator Password Tunggal (1 per 1) dengan Verifikasi 2-Langkah & Local Vault</p>
           </div>
         </div>
         <div className="page-hero-badges">
           <span className="hero-badge badge-cyan">🔒 1-by-1 Secure</span>
           <span className="hero-badge badge-violet">🛡️ Verifikasi 2-Langkah</span>
-          <span className="hero-badge badge-emerald">💾 Supabase Vault</span>
+          <span className="hero-badge badge-emerald">💾 Local Vault</span>
         </div>
       </section>
 
@@ -265,8 +271,8 @@ export default function GeneratPassPage() {
             <label htmlFor="pass-label-input">Label / Catatan Akun (Opsional):</label>
             <div className="url-input-wrapper">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                <line x1="7" y1="7" x2="7.01" y2="7"/>
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
               </svg>
               <input
                 id="pass-label-input"

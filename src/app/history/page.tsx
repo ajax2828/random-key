@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import Toast from '@/components/Toast';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
 
@@ -27,80 +26,72 @@ export default function HistoryPage() {
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string; source: 'account' | 'profile' | 'vault'; mode: 'single' | 'all' } | null>(null);
 
-  const supabase = createClient();
-
   const loadHistory = useCallback(async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
 
-    // Fetch from generated_accounts
-    const { data: accounts, error: accErr } = await supabase
-      .from('generated_accounts')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      // Fetch from all three local API endpoints
+      const [accRes, profRes, vaultRes] = await Promise.all([
+        fetch('/api/accounts').then((r) => (r.ok ? r.json() : { data: [] })),
+        fetch('/api/profiles').then((r) => (r.ok ? r.json() : { data: [] })),
+        fetch('/api/vault').then((r) => (r.ok ? r.json() : { data: [] })),
+      ]);
 
-    if (accErr) console.error('Accounts fetch error:', accErr);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accounts: any[] = (await accRes.data) || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const profiles: any[] = (await profRes.data) || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vaultItems: any[] = (await vaultRes.data) || [];
 
-    // Fetch from form_profiles
-    const { data: profiles, error: profErr } = await supabase
-      .from('form_profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (profErr) console.error('Profiles fetch error:', profErr);
-
-    // Fetch from password_vault
-    const { data: vaultItems, error: vaultErr } = await supabase
-      .from('password_vault')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (vaultErr) console.error('Vault fetch error:', vaultErr);
-
-    // Merge into unified HistoryItem list
-    const accountItems: HistoryItem[] = (accounts || []).map((a: any) => ({
-      id: a.id,
-      email: a.email,
-      password: a.password,
-      created_at: a.created_at,
-      source: 'account' as const,
-    }));
-
-    const profileItems: HistoryItem[] = (profiles || [])
-      .filter((p: any) => p.email || p.fullname)
-      .map((p: any) => ({
-        id: p.id,
-        email: p.email || '',
-        password: p.password || '',
-        created_at: p.created_at,
-        source: 'profile' as const,
-        fullname: p.fullname || undefined,
-        phone: p.phone || undefined,
-        username: p.username || undefined,
+      // Merge into unified HistoryItem list
+      const accountItems: HistoryItem[] = accounts.map((a) => ({
+        id: a.id,
+        email: a.email,
+        password: a.password,
+        created_at: a.created_at,
+        source: 'account' as const,
       }));
 
-    const vaultHistoryItems: HistoryItem[] = (vaultItems || []).map((v: any) => ({
-      id: v.id,
-      email: v.label ? `[Vault] ${v.label}` : '[Password Vault]',
-      password: v.password,
-      created_at: v.created_at,
-      source: 'vault' as const,
-      label: v.label || undefined,
-    }));
+      const profileItems: HistoryItem[] = profiles
+        .filter((p) => p.email || p.fullname)
+        .map((p) => ({
+          id: p.id,
+          email: p.email || '',
+          password: p.password || '',
+          created_at: p.created_at,
+          source: 'profile' as const,
+          fullname: p.fullname || undefined,
+          phone: p.phone || undefined,
+          username: p.username || undefined,
+        }));
 
-    // Combine and sort by created_at descending
-    const merged = [...accountItems, ...profileItems, ...vaultHistoryItems].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+      const vaultHistoryItems: HistoryItem[] = vaultItems.map((v) => ({
+        id: v.id,
+        email: v.label ? `[Vault] ${v.label}` : '[Password Vault]',
+        password: v.password,
+        created_at: v.created_at,
+        source: 'vault' as const,
+        label: v.label || undefined,
+      }));
 
-    setHistory(merged);
-    setLoading(false);
-  }, [supabase]);
+      // Combine and sort by created_at descending
+      const merged = [...accountItems, ...profileItems, ...vaultHistoryItems].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      setHistory(merged);
+    } catch (err) {
+      console.error('History load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     loadHistory();
-  }, [loadHistory]);
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -140,25 +131,21 @@ export default function HistoryPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Delete from all tables
-      await supabase.from('generated_accounts').delete().eq('user_id', user.id);
-      await supabase.from('form_profiles').delete().eq('user_id', user.id);
-      await supabase.from('password_vault').delete().eq('user_id', user.id);
+      // Delete from all local API tables
+      await fetch('/api/accounts?all=true', { method: 'DELETE' });
+      await fetch('/api/profiles?all=true', { method: 'DELETE' });
+      await fetch('/api/vault?all=true', { method: 'DELETE' });
       setHistory([]);
       showToast('Semua history berhasil dihapus!');
     } else {
       const { id, source } = deleteTarget;
-      const table =
-        source === 'account'
-          ? 'generated_accounts'
-          : source === 'profile'
-          ? 'form_profiles'
-          : 'password_vault';
-
-      await supabase.from(table).delete().eq('id', id);
+      const tableMap = {
+        account: '/api/accounts',
+        profile: '/api/profiles',
+        vault: '/api/vault',
+      };
+      const base = tableMap[source];
+      await fetch(`${base}?id=${id}`, { method: 'DELETE' });
       setHistory((prev) => prev.filter((item) => item.id !== id));
       showToast('Data berhasil dihapus!');
     }
@@ -279,7 +266,7 @@ export default function HistoryPage() {
 
       {loading ? (
         <div className="empty-state">
-          <p>Loading history dari Supabase...</p>
+          <p>Loading history dari database...</p>
         </div>
       ) : filteredHistory.length === 0 ? (
         <div className="empty-state">
@@ -381,10 +368,12 @@ export default function HistoryPage() {
                       <button
                         className="btn-action"
                         title="Copy Email & Password"
-                        onClick={() => handleCopy(
-                          [item.email, item.password, item.fullname || item.label].filter(Boolean).join('\n'),
-                          'Copied!'
-                        )}
+                        onClick={() =>
+                          handleCopy(
+                            [item.email, item.password, item.fullname || item.label].filter(Boolean).join('\n'),
+                            'Copied!'
+                          )
+                        }
                         type="button"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>

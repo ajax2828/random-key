@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient } from '@/utils/supabase/client';
 
 interface SecureDeleteModalProps {
   isOpen: boolean;
@@ -36,7 +35,6 @@ export default function SecureDeleteModal({
   const [isVerifying, setIsVerifying] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const supabase = createClient();
 
   // Draw captcha text on canvas with visual distortion
   const drawCaptcha = useCallback((text: string) => {
@@ -145,7 +143,7 @@ export default function SecureDeleteModal({
     setTimeout(() => drawCaptcha(text), 50);
   };
 
-  // Step 1: Verify Account Login Password with Supabase
+  // Step 1: Verify Account Login Password with local API
   const handleVerifyPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -157,21 +155,19 @@ export default function SecureDeleteModal({
 
     setIsVerifying(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !user.email) {
-        // Fallback if local/guest mode
-        setStep(2);
-        return;
-      }
-
-      // Test login with password
-      const { error } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: passwordInput,
+      // Re-authenticate with local API to verify the password
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: (window as any)._currentUserEmail || '',
+          password: passwordInput,
+        }),
       });
 
-      if (error) {
-        setErrorMsg('Password akun login salah!');
+      if (!res.ok) {
+        const data = await res.json();
+        setErrorMsg(data.error || 'Password akun login salah!');
       } else {
         // Password verified! Move to Step 2
         setStep(2);

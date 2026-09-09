@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { createClient } from '@/utils/supabase/server';
+import { getUser } from '@/lib/session-actions';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
   title: 'RandMail — Random Email & Password Generator',
-  description: 'Generate and manage random emails and secure passwords with Supabase database sync.',
+  description: 'Generate and manage random emails and secure passwords — with local PostgreSQL sync.',
 };
 
 export default async function RootLayout({
@@ -13,10 +13,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   return (
     <html lang="en">

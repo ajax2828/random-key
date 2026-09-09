@@ -10,7 +10,7 @@ import {
 } from '@/lib/formFillerGenerator';
 import Toast from '@/components/Toast';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
-import { createClient } from '@/utils/supabase/client';
+import { localApiClient } from '@/utils/supabase/client';
 
 export default function ToolsPage() {
   const [activeFields, setActiveFields] = useState<Record<string, boolean>>({
@@ -64,39 +64,35 @@ export default function ToolsPage() {
   // Delete state for SecureDeleteModal
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string; mode: 'single' | 'all' } | null>(null);
 
-  const supabase = createClient();
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2400);
   };
 
-  // Load profiles from Supabase database on page load
-  const loadProfilesFromSupabase = useCallback(async () => {
+  // Load profiles from local database on page load
+  const loadProfilesFromDB = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await localApiClient.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('form_profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.warn('Supabase form_profiles fetch notice:', error.message);
-      } else if (data && data.length > 0) {
-        setResults(data as GeneratedProfile[]);
+      const res = await fetch('/api/profiles');
+      if (!res.ok) {
+        console.warn('Profiles fetch notice:', res.status);
+        return;
+      }
+      const { data } = await res.json() as { data: GeneratedProfile[] };
+      if (data && data.length > 0) {
+        setResults(data);
         setSelectedProfileId(data[0].id);
       }
     } catch (err) {
       console.error('Error loading profiles:', err);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    loadProfilesFromSupabase();
-  }, [loadProfilesFromSupabase]);
+    loadProfilesFromDB();
+  }, [loadProfilesFromDB]);
 
   const handleToggleField = (field: string) => {
     setActiveFields((prev) => ({
@@ -115,7 +111,7 @@ export default function ToolsPage() {
 
     setIsGenerating(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await localApiClient.getUser();
       const generatedList: GeneratedProfile[] = [];
 
       for (let i = 0; i < quantity; i++) {
@@ -125,9 +121,8 @@ export default function ToolsPage() {
       }
 
       if (user) {
-        // Prepare items for Supabase insert
+        // Prepare items for local API insert (no user_id needed — API resolves from session)
         const toInsert = generatedList.map((item) => ({
-          user_id: user.id,
           gender: item.gender,
           fullname: item.fullname || null,
           email: item.email || null,
@@ -144,18 +139,25 @@ export default function ToolsPage() {
           form_link: item.form_link || null,
         }));
 
-        const { data, error } = await supabase
-          .from('form_profiles')
-          .insert(toInsert)
-          .select('*');
-
-        if (error) {
-          console.warn('Supabase save notice (falling back locally):', error.message);
+        try {
+          const res = await fetch('/api/profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toInsert),
+          });
+          const result = await res.json();
+          if (res.ok && result.data) {
+            showToast(`Tersimpan ${result.data.length} profil di database!`);
+            setResults((prev) => [...(result.data as GeneratedProfile[]), ...prev]);
+          } else {
+            console.warn('Profile save notice (fallback local):', result.error || 'unknown');
+            showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
+            setResults((prev) => [...generatedList, ...prev]);
+          }
+        } catch (err) {
+          console.warn('Profile save fallback (local):', err);
           showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
           setResults((prev) => [...generatedList, ...prev]);
-        } else if (data) {
-          showToast(`Tersimpan ${data.length} profil di Supabase!`);
-          setResults((prev) => [...(data as GeneratedProfile[]), ...prev]);
         }
       } else {
         setResults((prev) => [...generatedList, ...prev]);
@@ -300,33 +302,21 @@ export default function ToolsPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      // Delete all profiles from Supabase
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error } = await supabase
-          .from('form_profiles')
-          .delete()
-          .eq('user_id', user.id);
-        if (error) console.error('Supabase delete all error:', error);
-      }
+      // Delete all profiles from local database
+      await fetch('/api/profiles?all=true', { method: 'DELETE' });
       setResults([]);
       setSelectedProfileId('');
-      showToast('Semua profil berhasil dihapus dari Supabase!');
+      showToast('Semua profil berhasil dihapus dari database!');
     } else {
       // Delete single profile
       const { id } = deleteTarget;
-      const { error } = await supabase
-        .from('form_profiles')
-        .delete()
-        .eq('id', id);
-      if (error) console.error('Supabase delete error:', error);
-
+      await fetch(`/api/profiles?id=${id}`, { method: 'DELETE' });
       setResults((prev) => prev.filter((p) => p.id !== id));
       if (selectedProfileId === id) {
         const remaining = results.filter((p) => p.id !== id);
         setSelectedProfileId(remaining[0]?.id || '');
       }
-      showToast('Profil berhasil dihapus dari Supabase!');
+      showToast('Profil berhasil dihapus dari database!');
     }
   };
 
@@ -378,7 +368,7 @@ export default function ToolsPage() {
         </div>
         <div className="page-hero-badges">
           <span className="hero-badge badge-cyan">👤 Form Profiler</span>
-          <span className="hero-badge badge-emerald">💾 Supabase Sync</span>
+          <span className="hero-badge badge-emerald">💾 Local Database</span>
           <span className="hero-badge badge-violet">🚀 Auto-Fill</span>
         </div>
       </section>
@@ -449,8 +439,8 @@ export default function ToolsPage() {
       {/* Field Picker Grid */}
       <section className="tools-card-section">
         <div className="section-header-row">
-          <h3>Konfigurasi & Generator Profil Supabase</h3>
-          <span className="info-badge">💾 Supabase Database Connected</span>
+          <h3>Konfigurasi & Generator Profil Lokal</h3>
+          <span className="info-badge">💾 Local Database Connected</span>
         </div>
 
         <div className="fields-grid">
