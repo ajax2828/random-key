@@ -21,25 +21,25 @@ export default function EmailSettings({ options, onChange }: EmailSettingsProps)
             <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
           </svg>
         </div>
-        <h2>Email Settings</h2>
+        <h2>Pengaturan Email</h2>
       </div>
 
       <div className="card-body">
         <div className="form-group">
-          <label htmlFor="email-prefix-style">Username Style</label>
+          <label htmlFor="email-prefix-style">Gaya Username</label>
           <select
             id="email-prefix-style"
             value={options.style}
             onChange={(e) => updateOption('style', e.target.value as EmailOptions['style'])}
           >
-            <option value="random">Random Characters</option>
-            <option value="name">Name-Based</option>
-            <option value="word">Word Combo</option>
+            <option value="random">Karakter Acak</option>
+            <option value="name">Berdasarkan Nama</option>
+            <option value="word">Kombinasi Kata</option>
           </select>
         </div>
 
         <div className="form-group">
-          <label htmlFor="email-length">Username Length: <span>{options.length}</span></label>
+          <label htmlFor="email-length">Panjang Username: <span>{options.length}</span></label>
           <input
             type="range"
             id="email-length"
@@ -63,7 +63,7 @@ export default function EmailSettings({ options, onChange }: EmailSettingsProps)
             <option value="@hotmail.com">hotmail.com</option>
             <option value="@protonmail.com">protonmail.com</option>
             <option value="@mail.com">mail.com</option>
-            <option value="random">Random Domain</option>
+            <option value="random">Domain Acak</option>
           </select>
         </div>
 
@@ -75,7 +75,7 @@ export default function EmailSettings({ options, onChange }: EmailSettingsProps)
               checked={options.includeNumbers}
               onChange={(e) => updateOption('includeNumbers', e.target.checked)}
             />
-            <label htmlFor="email-numbers">Include Numbers</label>
+            <label htmlFor="email-numbers">Sertakan Angka</label>
           </div>
           <div className="form-check">
             <input
@@ -84,7 +84,7 @@ export default function EmailSettings({ options, onChange }: EmailSettingsProps)
               checked={options.includeDots}
               onChange={(e) => updateOption('includeDots', e.target.checked)}
             />
-            <label htmlFor="email-dots">Include Dots</label>
+            <label htmlFor="email-dots">Sertakan Titik</label>
           </div>
         </div>
       </div>

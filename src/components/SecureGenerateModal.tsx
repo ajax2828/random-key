@@ -201,7 +201,7 @@ export default function SecureGenerateModal({
             <h3>Buat Password Baru</h3>
             <span className="modal-subtitle modal-subtitle-generate">Verifikasi 2-Langkah Diperlukan</span>
           </div>
-          <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close modal">
+          <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Tutup modal">
             &times;
           </button>
         </div>
@@ -263,7 +263,7 @@ export default function SecureGenerateModal({
 
               <div className="captcha-container">
                 <canvas ref={canvasRef} width={280} height={70} className="captcha-canvas" aria-label="Captcha verification code" />
-                <button type="button" className="captcha-refresh-btn" onClick={handleRefreshCaptcha} title="Refresh" aria-label="Refresh captcha">
+                <button type="button" className="captcha-refresh-btn" onClick={handleRefreshCaptcha} title="Refresh" aria-label="Segarkan captcha">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="23 4 23 10 17 10" />
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />

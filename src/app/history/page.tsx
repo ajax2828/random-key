@@ -110,7 +110,7 @@ export default function HistoryPage() {
       await navigator.clipboard.writeText(text);
       showToast(label);
     } catch {
-      showToast('Copy failed');
+      showToast('Gagal menyalin');
     }
   };
 
@@ -160,7 +160,7 @@ export default function HistoryPage() {
 
   const handleExportCSV = () => {
     if (filteredHistory.length === 0) {
-      showToast('No history to export');
+      showToast('Tidak ada riwayat untuk diekspor');
       return;
     }
 
@@ -184,7 +184,7 @@ export default function HistoryPage() {
     link.click();
     URL.revokeObjectURL(url);
 
-    showToast(`Exported ${filteredHistory.length} items`);
+    showToast(`Berhasil mengekspor ${filteredHistory.length} item`);
   };
 
   // Filter by search term + source type
@@ -209,9 +209,9 @@ export default function HistoryPage() {
     <div className="results-section">
       <div className="results-header">
         <div>
-          <h2>Account &amp; Password History</h2>
+          <h2>Riwayat Akun & Password</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            Data dari GeneratMail ({accountCount}), GeneratPass ({vaultCount}), &amp; GeneratPro ({profileCount})
+            Data dari GeneratMail ({accountCount}), GeneratPass ({vaultCount}), & GeneratPro ({profileCount})
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -273,7 +273,7 @@ export default function HistoryPage() {
 
       {loading ? (
         <div className="empty-state">
-          <p>Loading history dari database...</p>
+          <p>Memuat history dari database...</p>
         </div>
       ) : filteredHistory.length === 0 ? (
         <div className="empty-state">
@@ -289,8 +289,8 @@ export default function HistoryPage() {
                 <th>Email / Label</th>
                 <th>Password</th>
                 <th>Info Tambahan</th>
-                <th>Created At</th>
-                <th>Actions</th>
+                <th>Dibuat Pada</th>
+                <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -316,8 +316,8 @@ export default function HistoryPage() {
                     {item.email ? (
                       <span
                         className="result-value"
-                        title="Copy Email/Label"
-                        onClick={() => handleCopy(item.email, 'Email/Label copied!')}
+                        title="Salin Email/Label"
+                        onClick={() => handleCopy(item.email, 'Email/Label tersalin!')}
                       >
                         {item.email}
                       </span>
@@ -329,8 +329,8 @@ export default function HistoryPage() {
                     {item.password ? (
                       <span
                         className="result-value"
-                        title="Copy Password"
-                        onClick={() => handleCopy(item.password, 'Password copied!')}
+                        title="Salin Password"
+                        onClick={() => handleCopy(item.password, 'Password tersalin!')}
                       >
                         {item.password}
                       </span>
@@ -344,8 +344,8 @@ export default function HistoryPage() {
                         {item.fullname && (
                           <span
                             className="result-value"
-                            title="Copy Nama"
-                            onClick={() => handleCopy(item.fullname!, 'Nama copied!')}
+                            title="Salin Nama"
+                            onClick={() => handleCopy(item.fullname!, 'Nama tersalin!')}
                             style={{ fontSize: '0.78rem' }}
                           >
                             {item.fullname}
@@ -374,11 +374,11 @@ export default function HistoryPage() {
                     <div style={{ display: 'flex', gap: '4px' }}>
                       <button
                         className="btn-action"
-                        title="Copy Email & Password"
+                        title="Salin Email & Password"
                         onClick={() =>
                           handleCopy(
                             [item.email, item.password, item.fullname || item.label].filter(Boolean).join('\n'),
-                            'Copied!'
+                            'Tersalin!'
                           )
                         }
                         type="button"
@@ -387,7 +387,7 @@ export default function HistoryPage() {
                       </button>
                       <button
                         className="btn-action delete"
-                        title="Delete"
+                        title="Hapus"
                         onClick={() => handleDeleteRequest(item)}
                         type="button"
                       >

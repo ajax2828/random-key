@@ -35,7 +35,7 @@ export default function GenerateControls({
             className="qty-btn"
             onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
             type="button"
-            aria-label="Decrease quantity"
+            aria-label="Kurangi jumlah"
           >
             −
           </button>
@@ -46,13 +46,13 @@ export default function GenerateControls({
             min="1"
             max="100"
             onChange={(e) => handleQuantityChange(e.target.value)}
-            aria-label="Quantity"
+            aria-label="Jumlah"
           />
           <button
             className="qty-btn"
             onClick={() => onQuantityChange(Math.min(100, quantity + 1))}
             type="button"
-            aria-label="Increase quantity"
+            aria-label="Tambah jumlah"
           >
             +
           </button>

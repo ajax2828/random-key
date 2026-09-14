@@ -18,7 +18,7 @@ interface ResultItemProps {
 
 export default function ResultItem({ pair, index, onCopy, onDelete }: ResultItemProps) {
   const handleCopyBoth = () => {
-    onCopy(`${pair.email}\n${pair.password}`, 'Email & Password copied!');
+    onCopy(`${pair.email}\n${pair.password}`, 'Email & Password tersalin!');
   };
 
   return (
@@ -29,8 +29,8 @@ export default function ResultItem({ pair, index, onCopy, onDelete }: ResultItem
         <span className="result-label email-label">Email</span>
         <span
           className="result-value"
-          title="Click to copy email"
-          onClick={() => onCopy(pair.email, 'Email copied!')}
+          title="Klik untuk salin email"
+          onClick={() => onCopy(pair.email, 'Email tersalin!')}
         >
           {pair.email}
         </span>
@@ -40,8 +40,8 @@ export default function ResultItem({ pair, index, onCopy, onDelete }: ResultItem
         <span className="result-label password-label">Password</span>
         <span
           className="result-value"
-          title="Click to copy password"
-          onClick={() => onCopy(pair.password, 'Password copied!')}
+          title="Klik untuk salin password"
+          onClick={() => onCopy(pair.password, 'Password tersalin!')}
         >
           {pair.password}
         </span>
@@ -50,7 +50,7 @@ export default function ResultItem({ pair, index, onCopy, onDelete }: ResultItem
       <div className="result-actions">
         <button
           className="btn-action"
-          title="Copy Both"
+          title="Salin Keduanya"
           onClick={handleCopyBoth}
           type="button"
         >
@@ -61,7 +61,7 @@ export default function ResultItem({ pair, index, onCopy, onDelete }: ResultItem
 
         <button
           className="btn-action delete"
-          title="Delete"
+          title="Hapus"
           onClick={() => onDelete(pair.id)}
           type="button"
         >
