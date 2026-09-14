@@ -26,71 +26,78 @@ export default function HistoryPage() {
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string; source: 'account' | 'profile' | 'vault'; mode: 'single' | 'all' } | null>(null);
 
-  const loadHistory = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    let ignore = false;
 
-    try {
-      // Fetch from all three local API endpoints
-      const [accRes, profRes, vaultRes] = await Promise.all([
-        fetch('/api/accounts').then((r) => (r.ok ? r.json() : { data: [] })),
-        fetch('/api/profiles').then((r) => (r.ok ? r.json() : { data: [] })),
-        fetch('/api/vault').then((r) => (r.ok ? r.json() : { data: [] })),
-      ]);
+    (async () => {
+      setLoading(true);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const accounts: any[] = (await accRes.data) || [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const profiles: any[] = (await profRes.data) || [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vaultItems: any[] = (await vaultRes.data) || [];
+      try {
+        // Fetch from all three local API endpoints
+        const [accRes, profRes, vaultRes] = await Promise.all([
+          fetch('/api/accounts').then((r) => (r.ok ? r.json() : { data: [] })),
+          fetch('/api/profiles').then((r) => (r.ok ? r.json() : { data: [] })),
+          fetch('/api/vault').then((r) => (r.ok ? r.json() : { data: [] })),
+        ]);
 
-      // Merge into unified HistoryItem list
-      const accountItems: HistoryItem[] = accounts.map((a) => ({
-        id: a.id,
-        email: a.email,
-        password: a.password,
-        created_at: a.created_at,
-        source: 'account' as const,
-      }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const accounts: any[] = (await accRes.data) || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const profiles: any[] = (await profRes.data) || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const vaultItems: any[] = (await vaultRes.data) || [];
 
-      const profileItems: HistoryItem[] = profiles
-        .filter((p) => p.email || p.fullname)
-        .map((p) => ({
-          id: p.id,
-          email: p.email || '',
-          password: p.password || '',
-          created_at: p.created_at,
-          source: 'profile' as const,
-          fullname: p.fullname || undefined,
-          phone: p.phone || undefined,
-          username: p.username || undefined,
+        // Merge into unified HistoryItem list
+        const accountItems: HistoryItem[] = accounts.map((a) => ({
+          id: a.id,
+          email: a.email,
+          password: a.password,
+          created_at: a.created_at,
+          source: 'account' as const,
         }));
 
-      const vaultHistoryItems: HistoryItem[] = vaultItems.map((v) => ({
-        id: v.id,
-        email: v.label ? `[Vault] ${v.label}` : '[Password Vault]',
-        password: v.password,
-        created_at: v.created_at,
-        source: 'vault' as const,
-        label: v.label || undefined,
-      }));
+        const profileItems: HistoryItem[] = profiles
+          .filter((p) => p.email || p.fullname)
+          .map((p) => ({
+            id: p.id,
+            email: p.email || '',
+            password: p.password || '',
+            created_at: p.created_at,
+            source: 'profile' as const,
+            fullname: p.fullname || undefined,
+            phone: p.phone || undefined,
+            username: p.username || undefined,
+          }));
 
-      // Combine and sort by created_at descending
-      const merged = [...accountItems, ...profileItems, ...vaultHistoryItems].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+        const vaultHistoryItems: HistoryItem[] = vaultItems.map((v) => ({
+          id: v.id,
+          email: v.label ? `[Vault] ${v.label}` : '[Password Vault]',
+          password: v.password,
+          created_at: v.created_at,
+          source: 'vault' as const,
+          label: v.label || undefined,
+        }));
 
-      setHistory(merged);
-    } catch (err) {
-      console.error('History load error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        // Combine and sort by created_at descending
+        const merged = [...accountItems, ...profileItems, ...vaultHistoryItems].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    loadHistory();
+        if (!ignore) {
+          setHistory(merged);
+        }
+      } catch (err) {
+        console.error('History load error:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -395,13 +402,15 @@ export default function HistoryPage() {
         </div>
       )}
 
-      <SecureDeleteModal
-        isOpen={!!deleteTarget}
-        title={deleteTarget?.mode === 'all' ? 'Hapus Semua History' : 'Hapus Data'}
-        itemDescription={deleteTarget?.email || ''}
-        onConfirm={handleConfirmDelete}
-        onClose={() => setDeleteTarget(null)}
-      />
+      {deleteTarget && (
+        <SecureDeleteModal
+          isOpen={!!deleteTarget}
+          title={deleteTarget?.mode === 'all' ? 'Hapus Semua History' : 'Hapus Data'}
+          itemDescription={deleteTarget?.email || ''}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
 
       <Toast message={toastMessage} />
     </div>
