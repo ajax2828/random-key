@@ -28,7 +28,6 @@ export default function AuthForm({ type }: AuthFormProps) {
 
     try {
       if (type === 'login') {
-        // Authenticate with local API
         const { user, error: authError } = await localApiClient.signIn(email, password);
 
         if (authError) {
@@ -40,7 +39,6 @@ export default function AuthForm({ type }: AuthFormProps) {
           router.refresh();
         }
       } else {
-        // Register with local API
         const { user, error: authError } = await localApiClient.signUp(email, password, fullName);
 
         if (authError) {
@@ -67,7 +65,7 @@ export default function AuthForm({ type }: AuthFormProps) {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h2>{type === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
+          <h2>{type === 'login' ? 'Selamat Datang Kembali' : 'Buat Akun'}</h2>
           <p>
             {type === 'login'
               ? 'Masukkan email & password untuk masuk ke RandMail'
@@ -75,9 +73,9 @@ export default function AuthForm({ type }: AuthFormProps) {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          {error && <div className="auth-error">{error}</div>}
-          {success && <div className="auth-success">{success}</div>}
+        <form onSubmit={handleSubmit} className="auth-form" noValidate>
+          {error && <div className="auth-error" role="alert">{error}</div>}
+          {success && <div className="auth-success" role="status">{success}</div>}
 
           {type === 'register' && (
             <div className="form-group">
@@ -88,12 +86,14 @@ export default function AuthForm({ type }: AuthFormProps) {
                 placeholder="John Doe"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                required
+                autoComplete="name"
               />
             </div>
           )}
 
           <div className="form-group">
-            <label htmlFor="auth-email">Email Address</label>
+            <label htmlFor="auth-email">Alamat Email</label>
             <input
               type="email"
               id="auth-email"
@@ -101,6 +101,7 @@ export default function AuthForm({ type }: AuthFormProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
             />
           </div>
 
@@ -113,11 +114,12 @@ export default function AuthForm({ type }: AuthFormProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete={type === 'login' ? 'current-password' : 'new-password'}
             />
           </div>
 
           <button type="submit" className="btn-submit" disabled={loading}>
-            {loading ? 'Memproses...' : type === 'login' ? 'Sign In' : 'Sign Up'}
+            {loading ? 'Memproses...' : type === 'login' ? 'Masuk' : 'Daftar'}
           </button>
         </form>
 

@@ -13,22 +13,21 @@ export default function PasswordSettings({ options, onChange }: PasswordSettings
     onChange({ ...options, [key]: value });
   };
 
-  // Calculate Password Strength
   const calculateStrength = () => {
     const { length, useUpper, useLower, useNumbers, useSymbols } = options;
-    const types = [useUpper, useLower, useNumbers, useSymbols].filter(Boolean).length;
+    const typesCount = [useUpper, useLower, useNumbers, useSymbols].filter(Boolean).length;
 
     let score = 0;
     if (length >= 8) score += 1;
     if (length >= 12) score += 1;
     if (length >= 16) score += 1;
     if (length >= 24) score += 1;
-    score += types;
+    score += typesCount;
 
-    if (score <= 2) return { label: 'Weak', color: '#fb7185', width: '25%' };
-    if (score <= 4) return { label: 'Fair', color: '#fbbf24', width: '50%' };
-    if (score <= 6) return { label: 'Strong', color: '#34d399', width: '75%' };
-    return { label: 'Very Strong', color: '#06b6d4', width: '100%' };
+    if (score <= 2) return { label: 'Lemah', color: '#fb7185', width: '25%' };
+    if (score <= 4) return { label: 'Cukup', color: '#fbbf24', width: '50%' };
+    if (score <= 6) return { label: 'Kuat', color: '#34d399', width: '75%' };
+    return { label: 'Sangat Kuat', color: '#06b6d4', width: '100%' };
   };
 
   const strength = calculateStrength();
@@ -41,12 +40,12 @@ export default function PasswordSettings({ options, onChange }: PasswordSettings
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
         </div>
-        <h2>Password Settings</h2>
+        <h2>Pengaturan Password</h2>
       </div>
 
       <div className="card-body">
         <div className="form-group">
-          <label htmlFor="pass-length">Length: <span>{options.length}</span></label>
+          <label htmlFor="pass-length">Panjang: <span>{options.length}</span> karakter</label>
           <input
             type="range"
             id="pass-length"
@@ -58,7 +57,7 @@ export default function PasswordSettings({ options, onChange }: PasswordSettings
         </div>
 
         <div className="form-group">
-          <label>Character Types</label>
+          <label>Jenis Karakter</label>
           <div className="char-types">
             <div className="form-check">
               <input
@@ -100,7 +99,7 @@ export default function PasswordSettings({ options, onChange }: PasswordSettings
         </div>
 
         <div className="form-group">
-          <label>Password Strength</label>
+          <label>Kekuatan Password</label>
           <div className="strength-meter">
             <div
               className="strength-bar"

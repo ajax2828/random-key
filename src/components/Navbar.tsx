@@ -24,26 +24,22 @@ export default function Navbar({ user }: NavbarProps) {
 
   useEffect(() => {
     if (!user) return;
-    // Use local API instead of Supabase for profile info
     localApiClient.getUser().then((u) => {
       if (u) setProfile({ full_name: u.full_name ?? undefined, role: u.role, status: u.status });
     });
   }, [user]);
+
+  // Close menus when route changes
+  useEffect(() => {
+    setMobileOpen(false);
+    setDesktopOpen(false);
+  }, [pathname]);
 
   const handleLogout = async () => {
     await localApiClient.signOut();
     router.push('/login');
     router.refresh();
   };
-
-  // Close menus on route change
-  useEffect(() => {
-    const close = () => {
-      setMobileOpen(false);
-      setDesktopOpen(false);
-    };
-    queueMicrotask(close);
-  }, [pathname]);
 
   const pageTitle = pathname === '/dashboard'
     ? 'Dashboard'
@@ -64,7 +60,7 @@ export default function Navbar({ user }: NavbarProps) {
     : 'RandMail';
 
   const pageBadge = pathname === '/dashboard/generate'
-    ? { label: 'Email & Password', color: 'violet' }
+    ? { label: 'Email & Password', color: 'violet' as const }
     : null;
 
   const navItems = [
@@ -132,7 +128,6 @@ export default function Navbar({ user }: NavbarProps) {
         </div>
       </Link>
 
-      {/* Desktop dropdown trigger — always visible */}
       <div className="navbar-right">
         {user && (
           <div className="navbar-user-avatar" title={profile?.full_name || user.email}>
@@ -143,6 +138,7 @@ export default function Navbar({ user }: NavbarProps) {
           className="hamburger-btn desktop-hamburger"
           onClick={() => setDesktopOpen(!desktopOpen)}
           aria-label="Toggle menu"
+          aria-expanded={desktopOpen}
           type="button"
         >
           <span className="hamburger-icon">
@@ -153,10 +149,8 @@ export default function Navbar({ user }: NavbarProps) {
         </button>
       </div>
 
-      {/* Overlay (desktop) */}
       <div className={`nav-desktop-overlay ${desktopOpen ? 'open' : ''}`} onClick={() => setDesktopOpen(false)} />
 
-      {/* Desktop dropdown panel */}
       <div className={`nav-desktop-panel ${desktopOpen ? 'open' : ''}`}>
         <nav className="nav-links-desktop">
           {navItems.map((item) => (
@@ -185,11 +179,11 @@ export default function Navbar({ user }: NavbarProps) {
         )}
       </div>
 
-      {/* Mobile hamburger — only visible on mobile */}
       <button
         className="hamburger-btn mobile-hamburger"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle menu"
+        aria-expanded={mobileOpen}
         type="button"
       >
         <div className="hamburger-icon">
@@ -199,10 +193,8 @@ export default function Navbar({ user }: NavbarProps) {
         </div>
       </button>
 
-      {/* Mobile overlay */}
       <div className={`nav-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
 
-      {/* Mobile nav links */}
       <nav className={`nav-links ${mobileOpen ? 'open' : ''}`}>
         {navItems.map((item) => (
           <Link

@@ -11,7 +11,6 @@ interface SecureDeleteModalProps {
   onClose: () => void;
 }
 
-/** Generate a random captcha string of mixed letters & digits */
 function generateCaptchaText(length = 6): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let result = '';
@@ -37,7 +36,6 @@ export default function SecureDeleteModal({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Draw captcha text on canvas with visual distortion
   const drawCaptcha = useCallback((text: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -47,7 +45,8 @@ export default function SecureDeleteModal({
     const w = canvas.width;
     const h = canvas.height;
 
-    // Dark gradient background
+    ctx.clearRect(0, 0, w, h);
+
     const bgGrad = ctx.createLinearGradient(0, 0, w, h);
     bgGrad.addColorStop(0, '#0d0f1c');
     bgGrad.addColorStop(0.5, '#141829');
@@ -55,7 +54,6 @@ export default function SecureDeleteModal({
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Noise dots
     for (let i = 0; i < 120; i++) {
       ctx.fillStyle = `rgba(${100 + Math.random() * 155}, ${100 + Math.random() * 155}, ${200 + Math.random() * 55}, ${0.15 + Math.random() * 0.15})`;
       ctx.beginPath();
@@ -63,7 +61,6 @@ export default function SecureDeleteModal({
       ctx.fill();
     }
 
-    // Wavy noise lines
     for (let l = 0; l < 4; l++) {
       ctx.strokeStyle = `rgba(${150 + Math.random() * 105}, ${100 + Math.random() * 100}, 250, ${0.12 + Math.random() * 0.15})`;
       ctx.lineWidth = 1 + Math.random();
@@ -76,7 +73,6 @@ export default function SecureDeleteModal({
       ctx.stroke();
     }
 
-    // Draw each captcha character with individual transforms
     const charWidth = w / (text.length + 1.5);
     const colors = ['#a78bfa', '#06b6d4', '#34d399', '#fb7185', '#fbbf24', '#818cf8'];
 
@@ -84,44 +80,44 @@ export default function SecureDeleteModal({
       ctx.save();
       const x = charWidth * (i + 1);
       const y = h / 2 + (Math.random() - 0.5) * 14;
-      const angle = (Math.random() - 0.5) * 0.5; // ±~15°
-
+      const angle = (Math.random() - 0.5) * 0.5;
       ctx.translate(x, y);
       ctx.rotate(angle);
-
       const fontSize = 26 + Math.random() * 6;
       ctx.font = `bold ${fontSize}px 'JetBrains Mono', 'Courier New', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-
-      // Glow shadow
       const color = colors[i % colors.length];
       ctx.shadowColor = color;
       ctx.shadowBlur = 6 + Math.random() * 6;
-
       ctx.fillStyle = color;
       ctx.fillText(text[i], 0, 0);
-
       ctx.restore();
     }
 
-    // Overlay scanlines
     for (let y = 0; y < h; y += 3) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
       ctx.fillRect(0, y, w, 1);
     }
   }, []);
 
-  // Draw captcha when entering step 2 or when text changes
   useEffect(() => {
     if (step === 2 && captchaText) {
-      // Small delay to let canvas mount
       const t = setTimeout(() => drawCaptcha(captchaText), 50);
       return () => clearTimeout(t);
     }
   }, [step, captchaText, drawCaptcha]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      const text = generateCaptchaText(6);
+      setCaptchaText(text);
+      setCaptchaInput('');
+      setErrorMsg(null);
+      setStep(1);
+      setPasswordInput('');
+    }
+  }, [isOpen]);
 
   const handleRefreshCaptcha = () => {
     const text = generateCaptchaText(6);
@@ -131,7 +127,6 @@ export default function SecureDeleteModal({
     setTimeout(() => drawCaptcha(text), 50);
   };
 
-  // Step 1: Verify Account Login Password with local API
   const handleVerifyPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -143,7 +138,6 @@ export default function SecureDeleteModal({
 
     setIsVerifying(true);
     try {
-      // Re-authenticate with local API to verify the password
       const user = await localApiClient.getUser();
       if (!user?.email) {
         setErrorMsg('Gagal mengambil email akun Anda. Silakan login ulang.');
@@ -163,7 +157,6 @@ export default function SecureDeleteModal({
         const data = await res.json();
         setErrorMsg(data.error || 'Password akun login salah!');
       } else {
-        // Password verified! Move to Step 2
         setStep(2);
         setErrorMsg(null);
       }
@@ -174,7 +167,6 @@ export default function SecureDeleteModal({
     }
   };
 
-  // Step 2: Verify captcha and execute deletion
   const handleConfirmDelete = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -196,6 +188,8 @@ export default function SecureDeleteModal({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="modal-backdrop">
       <div className="modal-card">
@@ -211,7 +205,7 @@ export default function SecureDeleteModal({
             <h3>{title}</h3>
             <span className="modal-subtitle">Verifikasi Keamanan 2-Langkah</span>
           </div>
-          <button className="modal-close-btn" onClick={onClose} type="button">
+          <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close modal">
             &times;
           </button>
         </div>
@@ -224,7 +218,6 @@ export default function SecureDeleteModal({
             </div>
           )}
 
-          {/* Stepper Header */}
           <div className="modal-stepper">
             <div className={`step-item ${step === 1 ? 'active' : 'completed'}`}>
               <span className="step-num">{step > 1 ? '✓' : '1'}</span>
@@ -237,9 +230,8 @@ export default function SecureDeleteModal({
             </div>
           </div>
 
-          {errorMsg && <div className="modal-error-box">{errorMsg}</div>}
+          {errorMsg && <div className="modal-error-box" role="alert">{errorMsg}</div>}
 
-          {/* STEP 1: PASSWORD LOGIN */}
           {step === 1 && (
             <form onSubmit={handleVerifyPassword} className="modal-form-step">
               <p className="step-desc">
@@ -255,6 +247,7 @@ export default function SecureDeleteModal({
                   onChange={(e) => setPasswordInput(e.target.value)}
                   autoFocus
                   required
+                  autoComplete="current-password"
                 />
               </div>
 
@@ -269,7 +262,6 @@ export default function SecureDeleteModal({
             </form>
           )}
 
-          {/* STEP 2: CAPTCHA VERIFICATION */}
           {step === 2 && (
             <form onSubmit={handleConfirmDelete} className="modal-form-step">
               <p className="step-desc">
@@ -282,12 +274,14 @@ export default function SecureDeleteModal({
                   width={280}
                   height={70}
                   className="captcha-canvas"
+                  aria-label="Captcha verification code"
                 />
                 <button
                   type="button"
                   className="captcha-refresh-btn"
                   onClick={handleRefreshCaptcha}
                   title="Refresh Captcha"
+                  aria-label="Refresh captcha"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="23 4 23 10 17 10" />

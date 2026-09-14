@@ -18,8 +18,8 @@ export default function ResultsList({ pairs, onCopy, onDelete }: ResultsListProp
             <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
           </svg>
         </div>
-        <p>Click <strong>Generate & Save</strong> to create email & password pairs</p>
-        <span style={{ fontSize: '0.78rem' }}>Results will automatically sync with local database</span>
+        <p>Klik <strong>Generate & Save</strong> untuk membuat pasangan email & password</p>
+        <span style={{ fontSize: '0.78rem' }}>Hasil akan otomatis tersinkronisasi dengan database lokal</span>
       </div>
     );
   }

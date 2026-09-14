@@ -43,6 +43,8 @@ export default function SecureGenerateModal({
     const w = canvas.width;
     const h = canvas.height;
 
+    ctx.clearRect(0, 0, w, h);
+
     const bgGrad = ctx.createLinearGradient(0, 0, w, h);
     bgGrad.addColorStop(0, '#0d0f1c');
     bgGrad.addColorStop(0.5, '#141829');
@@ -98,13 +100,22 @@ export default function SecureGenerateModal({
   }, []);
 
   useEffect(() => {
+    if (isOpen) {
+      const text = generateCaptchaText(6);
+      setCaptchaText(text);
+      setCaptchaInput('');
+      setErrorMsg(null);
+      setStep(1);
+      setPasswordInput('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (step === 2 && captchaText) {
       const t = setTimeout(() => drawCaptcha(captchaText), 50);
       return () => clearTimeout(t);
     }
   }, [step, captchaText, drawCaptcha]);
-
-  if (!isOpen) return null;
 
   const handleRefreshCaptcha = () => {
     const text = generateCaptchaText(6);
@@ -124,7 +135,6 @@ export default function SecureGenerateModal({
 
     setIsVerifying(true);
     try {
-      // Re-authenticate with local API to verify the password
       const user = await localApiClient.getUser();
       if (!user?.email) {
         setErrorMsg('Gagal mengambil email akun Anda. Silakan login ulang.');
@@ -175,6 +185,8 @@ export default function SecureGenerateModal({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="modal-backdrop">
       <div className="modal-card">
@@ -189,7 +201,9 @@ export default function SecureGenerateModal({
             <h3>Buat Password Baru</h3>
             <span className="modal-subtitle modal-subtitle-generate">Verifikasi 2-Langkah Diperlukan</span>
           </div>
-          <button className="modal-close-btn" onClick={onClose} type="button">&times;</button>
+          <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close modal">
+            &times;
+          </button>
         </div>
 
         <div className="modal-body">
@@ -212,7 +226,7 @@ export default function SecureGenerateModal({
             </div>
           </div>
 
-          {errorMsg && <div className="modal-error-box">{errorMsg}</div>}
+          {errorMsg && <div className="modal-error-box" role="alert">{errorMsg}</div>}
 
           {step === 1 && (
             <form onSubmit={handleVerifyPassword} className="modal-form-step">
@@ -229,6 +243,7 @@ export default function SecureGenerateModal({
                   onChange={(e) => setPasswordInput(e.target.value)}
                   autoFocus
                   required
+                  autoComplete="current-password"
                 />
               </div>
               <div className="modal-footer-actions">
@@ -247,8 +262,8 @@ export default function SecureGenerateModal({
               </p>
 
               <div className="captcha-container">
-                <canvas ref={canvasRef} width={280} height={70} className="captcha-canvas" />
-                <button type="button" className="captcha-refresh-btn" onClick={handleRefreshCaptcha} title="Refresh">
+                <canvas ref={canvasRef} width={280} height={70} className="captcha-canvas" aria-label="Captcha verification code" />
+                <button type="button" className="captcha-refresh-btn" onClick={handleRefreshCaptcha} title="Refresh" aria-label="Refresh captcha">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="23 4 23 10 17 10" />
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
