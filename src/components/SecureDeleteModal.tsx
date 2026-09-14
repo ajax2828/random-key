@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { localApiClient } from '@/utils/supabase/client';
 
 interface SecureDeleteModalProps {
   isOpen: boolean;
@@ -111,19 +112,6 @@ export default function SecureDeleteModal({
     }
   }, []);
 
-  // Reset state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setStep(1);
-      setPasswordInput('');
-      setCaptchaInput('');
-      setErrorMsg(null);
-      setIsVerifying(false);
-      const text = generateCaptchaText(6);
-      setCaptchaText(text);
-    }
-  }, [isOpen]);
-
   // Draw captcha when entering step 2 or when text changes
   useEffect(() => {
     if (step === 2 && captchaText) {
@@ -156,11 +144,17 @@ export default function SecureDeleteModal({
     setIsVerifying(true);
     try {
       // Re-authenticate with local API to verify the password
+      const user = await localApiClient.getUser();
+      if (!user?.email) {
+        setErrorMsg('Gagal mengambil email akun Anda. Silakan login ulang.');
+        return;
+      }
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: (window as any)._currentUserEmail || '',
+          email: user.email,
           password: passwordInput,
         }),
       });
@@ -194,8 +188,9 @@ export default function SecureDeleteModal({
     try {
       await onConfirm();
       onClose();
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Gagal menghapus data.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Gagal menghapus data.';
+      setErrorMsg(message);
     } finally {
       setIsVerifying(false);
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { localApiClient } from '@/utils/supabase/client';
 
 interface SecureGenerateModalProps {
   isOpen: boolean;
@@ -97,18 +98,6 @@ export default function SecureGenerateModal({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      setStep(1);
-      setPasswordInput('');
-      setCaptchaInput('');
-      setErrorMsg(null);
-      setIsVerifying(false);
-      const text = generateCaptchaText(6);
-      setCaptchaText(text);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
     if (step === 2 && captchaText) {
       const t = setTimeout(() => drawCaptcha(captchaText), 50);
       return () => clearTimeout(t);
@@ -136,11 +125,17 @@ export default function SecureGenerateModal({
     setIsVerifying(true);
     try {
       // Re-authenticate with local API to verify the password
+      const user = await localApiClient.getUser();
+      if (!user?.email) {
+        setErrorMsg('Gagal mengambil email akun Anda. Silakan login ulang.');
+        return;
+      }
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: (window as any)._currentUserEmail || '',
+          email: user.email,
           password: passwordInput,
         }),
       });
@@ -172,8 +167,9 @@ export default function SecureGenerateModal({
     try {
       await onConfirm();
       onClose();
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Gagal membuat password.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Gagal membuat password.';
+      setErrorMsg(message);
     } finally {
       setIsVerifying(false);
     }

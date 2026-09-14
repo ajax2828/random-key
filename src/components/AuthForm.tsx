@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { localApiClient } from '@/utils/supabase/client';
+import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/demo';
 
 interface AuthFormProps {
   type: 'login' | 'register';
@@ -54,8 +55,9 @@ export default function AuthForm({ type }: AuthFormProps) {
           }, 1500);
         }
       }
-    } catch (err: any) {
-      setError(err?.message || 'Terjadi kesalahan saat otentikasi.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Terjadi kesalahan saat otentikasi.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -130,6 +132,18 @@ export default function AuthForm({ type }: AuthFormProps) {
             </p>
           )}
         </div>
+
+        {type === 'login' && (
+          <div className="demo-credentials-box">
+            <span className="demo-credentials-title">Kredensial Demo</span>
+            <span className="demo-credentials-row">
+              Email: <code>{DEMO_EMAIL}</code>
+            </span>
+            <span className="demo-credentials-row">
+              Password: <code>{DEMO_PASSWORD}</code>
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
