@@ -7,9 +7,12 @@ import EmailSettings from '@/components/EmailSettings';
 import PasswordSettings from '@/components/PasswordSettings';
 import GenerateControls from '@/components/GenerateControls';
 import ResultsList from '@/components/ResultsList';
+import NoticePopup from '@/components/NoticePopup';
+import AiAssistant from '@/components/AiAssistant';
 import { CredentialPair } from '@/components/ResultItem';
 import { localApiClient } from '@/utils/supabase/client';
 import { EmailOptions, PasswordOptions, generateEmail, generatePassword } from '@/lib/generators';
+import { trackUsage } from '@/lib/usage';
 
 interface ApiCredential {
   id: string;
@@ -39,6 +42,7 @@ export default function GeneratePage() {
   const [results, setResults] = useState<CredentialPair[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string; mode?: 'single' | 'all' } | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -47,28 +51,33 @@ export default function GeneratePage() {
   }, []);
 
   // Load existing credentials from local API on mount
-  const loadCredentials = useCallback(async () => {
-    const user = await localApiClient.getUser();
-    if (!user) return;
-
-    try {
-      const res = await fetch('/api/accounts');
-      if (!res.ok) return;
-      const { data } = await res.json() as { data: ApiCredential[] };
-      setResults(data.map((d) => ({
-        id: d.id,
-        email: d.email,
-        password: d.password,
-        created_at: d.created_at,
-      })));
-    } catch (err) {
-      console.error('Error fetching credentials:', err);
-    }
-  }, []);
-
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    loadCredentials();
+    let ignore = false;
+
+    (async () => {
+      const user = await localApiClient.getUser();
+      if (!user || ignore) return;
+
+      try {
+        const res = await fetch('/api/accounts');
+        if (!res.ok) return;
+        const { data } = await res.json() as { data: ApiCredential[] };
+        if (!ignore) {
+          setResults(data.map((d) => ({
+            id: d.id,
+            email: d.email,
+            password: d.password,
+            created_at: d.created_at,
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching credentials:', err);
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   // Generate emails & passwords
@@ -88,6 +97,7 @@ export default function GeneratePage() {
           created_at: new Date().toISOString(),
         });
       }
+      trackUsage('mail', 'generate');
 
       if (user) {
         const toInsert = generatedList.map((item) => ({
@@ -109,15 +119,27 @@ export default function GeneratePage() {
             // Fallback to local-only
             setResults((prev) => [...generatedList, ...prev]);
             showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
+            setNotice({
+              title: 'Data Tidak Tersimpan ke Database',
+              message: `Koneksi ke database tidak tersedia, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Export CSV" sebelum menutup halaman.`,
+            });
           }
         } catch (err) {
           console.warn('Save fallback (local):', err);
           setResults((prev) => [...generatedList, ...prev]);
           showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
+          setNotice({
+            title: 'Data Tidak Tersimpan ke Database',
+            message: `Database tidak dapat dijangkau, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Export CSV" sebelum menutup halaman.`,
+          });
         }
       } else {
         setResults((prev) => [...generatedList, ...prev]);
         showToast(`Generated ${quantity} pasangan!`);
+        setNotice({
+          title: 'Data Tidak Tersimpan ke Database',
+          message: `Anda belum login, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Log in terlebih dahulu agar data tersimpan ke database.`,
+        });
       }
     } catch (err) {
       console.error('Generation error:', err);
@@ -253,15 +275,28 @@ export default function GeneratePage() {
         />
       </section>
 
-      <SecureDeleteModal
-        isOpen={!!deleteTarget}
-        title={deleteTarget?.mode === 'all' ? 'Hapus Semua Akun' : 'Hapus Akun'}
-        itemDescription={deleteTarget?.email || ''}
-        onConfirm={handleConfirmDelete}
-        onClose={() => setDeleteTarget(null)}
-      />
+      {deleteTarget && (
+        <SecureDeleteModal
+          isOpen={!!deleteTarget}
+          title={deleteTarget?.mode === 'all' ? 'Hapus Semua Akun' : 'Hapus Akun'}
+          itemDescription={deleteTarget?.email || ''}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
 
       <Toast message={toastMessage} />
+
+      {notice && (
+        <NoticePopup
+          open={!!notice}
+          title={notice.title}
+          message={notice.message}
+          onClose={() => setNotice(null)}
+        />
+      )}
+
+      <AiAssistant topic="mail" title="AI Bantuan GeneratMail" />
     </div>
   );
 }
