@@ -137,7 +137,7 @@ export default function Navbar({ user }: NavbarProps) {
         <button
           className="hamburger-btn desktop-hamburger"
           onClick={() => setDesktopOpen(!desktopOpen)}
-          aria-label="Buka menu"
+          aria-label={desktopOpen ? 'Tutup menu' : 'Buka menu'}
           aria-expanded={desktopOpen}
           type="button"
         >
@@ -182,7 +182,7 @@ export default function Navbar({ user }: NavbarProps) {
       <button
         className="hamburger-btn mobile-hamburger"
         onClick={() => setMobileOpen(!mobileOpen)}
-        aria-label="Buka menu"
+        aria-label={mobileOpen ? 'Tutup menu' : 'Buka menu'}
         aria-expanded={mobileOpen}
         type="button"
       >

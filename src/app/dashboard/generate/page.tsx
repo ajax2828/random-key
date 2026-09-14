@@ -121,7 +121,7 @@ export default function GeneratePage() {
             showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
             setNotice({
               title: 'Data Tidak Tersimpan ke Database',
-              message: `Koneksi ke database tidak tersedia, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Export CSV" sebelum menutup halaman.`,
+              message: `Koneksi ke database tidak tersedia, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Ekspor CSV" sebelum menutup halaman.`,
             });
           }
         } catch (err) {
@@ -130,7 +130,7 @@ export default function GeneratePage() {
           showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
           setNotice({
             title: 'Data Tidak Tersimpan ke Database',
-            message: `Database tidak dapat dijangkau, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Export CSV" sebelum menutup halaman.`,
+            message: `Database tidak dapat dijangkau, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Ekspor CSV" sebelum menutup halaman.`,
           });
         }
       } else {
@@ -184,14 +184,14 @@ export default function GeneratePage() {
       await navigator.clipboard.writeText(text);
       showToast(label);
     } catch {
-      showToast('Copy failed');
+      showToast('Gagal menyalin!');
     }
   };
 
   // Export CSV
   const handleExport = () => {
     if (results.length === 0) {
-      showToast('No data to export');
+      showToast('Tidak ada data untuk diekspor');
       return;
     }
 
@@ -207,7 +207,7 @@ export default function GeneratePage() {
     link.download = `randmail_export_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast(`Exported ${results.length} pairs!`);
+    showToast(`Berhasil mengekspor ${results.length} pasangan!`);
   };
 
   return (
