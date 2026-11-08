@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { getDataProvider } from '@/lib/dataProvider';
 import { getSessionUser } from '@/lib/session';
 
 // GET /api/vault     — list vault items
@@ -11,42 +11,38 @@ export async function GET(request: NextRequest) {
   const user = await getSessionUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const result = await query(
-    `SELECT id, label, password, length, strength,
-            use_upper, use_lower, use_numbers, use_symbols, created_at
-     FROM password_vault
-     WHERE user_id = $1
-     ORDER BY created_at DESC`,
-    [user.id]
-  );
-  return NextResponse.json({ data: result.rows });
+  try {
+    const provider = await getDataProvider('vault');
+    const data = await provider.list(user.id);
+    return NextResponse.json({ data });
+  } catch {
+    return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json();
-
-  const result = await query(
-    `INSERT INTO password_vault
-       (user_id, label, password, length, strength, use_upper, use_lower, use_numbers, use_symbols)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING id, label, password, length, strength,
-               use_upper, use_lower, use_numbers, use_symbols, created_at`,
-    [
-      user.id,
-      body.label || null,
-      body.password,
-      body.length || 18,
-      body.strength || 'Sedang',
-      body.use_upper ?? true,
-      body.use_lower ?? true,
-      body.use_numbers ?? true,
-      body.use_symbols ?? true,
-    ]
-  );
-  return NextResponse.json({ data: result.rows });
+  try {
+    const body = await request.json();
+    const provider = await getDataProvider('vault');
+    const data = await provider.insert(user.id, [
+      {
+        label: body.label ?? null,
+        password: body.password,
+        length: body.length ?? 18,
+        strength: body.strength ?? 'Sedang',
+        use_upper: body.use_upper ?? true,
+        use_lower: body.use_lower ?? true,
+        use_numbers: body.use_numbers ?? true,
+        use_symbols: body.use_symbols ?? true,
+      },
+    ]);
+    return NextResponse.json({ data });
+  } catch {
+    return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: NextRequest) {
@@ -57,14 +53,20 @@ export async function DELETE(request: NextRequest) {
   const id = searchParams.get('id');
   const all = searchParams.get('all') === 'true';
 
-  if (all) {
-    await query('DELETE FROM password_vault WHERE user_id = $1', [user.id]);
-    return NextResponse.json({ deleted: true });
-  }
+  try {
+    const provider = await getDataProvider('vault');
 
-  if (id) {
-    await query('DELETE FROM password_vault WHERE id = $1 AND user_id = $2', [id, user.id]);
-    return NextResponse.json({ deleted: true });
+    if (all) {
+      await provider.deleteAll(user.id);
+      return NextResponse.json({ deleted: true });
+    }
+
+    if (id) {
+      await provider.deleteById(user.id, id);
+      return NextResponse.json({ deleted: true });
+    }
+  } catch {
+    return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
   }
 
   return NextResponse.json({ error: 'Missing id' }, { status: 400 });

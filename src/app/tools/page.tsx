@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   generateFormFillerProfile,
   FormFillerProfileOptions,
@@ -10,7 +10,10 @@ import {
 } from '@/lib/formFillerGenerator';
 import Toast from '@/components/Toast';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
+import NoticePopup from '@/components/NoticePopup';
+import AiAssistant from '@/components/AiAssistant';
 import { localApiClient } from '@/utils/supabase/client';
+import { trackUsage } from '@/lib/usage';
 
 export default function ToolsPage() {
   const [activeFields, setActiveFields] = useState<Record<string, boolean>>({
@@ -60,6 +63,7 @@ export default function ToolsPage() {
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 
   // Delete state for SecureDeleteModal
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string; mode: 'single' | 'all' } | null>(null);
@@ -70,29 +74,33 @@ export default function ToolsPage() {
   };
 
   // Load profiles from local database on page load
-  const loadProfilesFromDB = useCallback(async () => {
-    try {
-      const user = await localApiClient.getUser();
-      if (!user) return;
-
-      const res = await fetch('/api/profiles');
-      if (!res.ok) {
-        console.warn('Profiles fetch notice:', res.status);
-        return;
-      }
-      const { data } = await res.json() as { data: GeneratedProfile[] };
-      if (data && data.length > 0) {
-        setResults(data);
-        setSelectedProfileId(data[0].id);
-      }
-    } catch (err) {
-      console.error('Error loading profiles:', err);
-    }
-  }, []);
-
   useEffect(() => {
-    loadProfilesFromDB();
-  }, [loadProfilesFromDB]);
+    let ignore = false;
+
+    (async () => {
+      try {
+        const user = await localApiClient.getUser();
+        if (!user || ignore) return;
+
+        const res = await fetch('/api/profiles');
+        if (!res.ok) {
+          console.warn('Profiles fetch notice:', res.status);
+          return;
+        }
+        const { data } = await res.json() as { data: GeneratedProfile[] };
+        if (data && data.length > 0 && !ignore) {
+          setResults(data);
+          setSelectedProfileId(data[0].id);
+        }
+      } catch (err) {
+        console.error('Error loading profiles:', err);
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleToggleField = (field: string) => {
     setActiveFields((prev) => ({
@@ -119,6 +127,7 @@ export default function ToolsPage() {
         if (formLink.trim()) p.form_link = formLink.trim();
         generatedList.push(p);
       }
+      trackUsage('tools', 'generate');
 
       if (user) {
         // Prepare items for local API insert (no user_id needed — API resolves from session)
@@ -153,15 +162,27 @@ export default function ToolsPage() {
             console.warn('Profile save notice (fallback local):', result.error || 'unknown');
             showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
             setResults((prev) => [...generatedList, ...prev]);
+            setNotice({
+              title: 'Data Tidak Tersimpan ke Database',
+              message: `Koneksi ke database tidak tersedia, jadi ${quantity} profil yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Gunakan "Salin Semua" atau "Export" sebelum menutup halaman.`,
+            });
           }
         } catch (err) {
           console.warn('Profile save fallback (local):', err);
           showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
           setResults((prev) => [...generatedList, ...prev]);
+          setNotice({
+            title: 'Data Tidak Tersimpan ke Database',
+            message: `Database tidak dapat dijangkau, jadi ${quantity} profil yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Gunakan "Salin Semua" atau "Export" sebelum menutup halaman.`,
+          });
         }
       } else {
         setResults((prev) => [...generatedList, ...prev]);
         showToast(`Generated ${quantity} data!`);
+        setNotice({
+          title: 'Data Tidak Tersimpan ke Database',
+          message: `Anda belum login, jadi ${quantity} profil yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Log in terlebih dahulu agar profil tersimpan ke database.`,
+        });
       }
 
       if (generatedList.length > 0) {
@@ -247,7 +268,7 @@ export default function ToolsPage() {
     results.forEach((profile, index) => {
       const row = [String(index + 1), profile.gender];
       activeKeys.forEach((key) => {
-        const val = (profile as any)[key] || '';
+        const val = (profile as unknown as Record<string, string | undefined>)[key] || '';
         row.push(`"${val.replace(/"/g, '""')}"`);
       });
       csvContent += row.join(',') + '\n';
@@ -269,7 +290,14 @@ export default function ToolsPage() {
       return;
     }
 
-    const cleanData = results.map(({ id, created_at, ...rest }) => rest);
+    const activeKeys = Object.keys(activeFields).filter((k) => activeFields[k]);
+    const cleanData = results.map((profile) => {
+      const rest: Record<string, string | undefined> = { gender: profile.gender };
+      for (const key of activeKeys) {
+        rest[key] = (profile as unknown as Record<string, string | undefined>)[key];
+      }
+      return rest;
+    });
     const jsonStr = JSON.stringify(cleanData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -466,7 +494,7 @@ export default function ToolsPage() {
                   <label>Gender:</label>
                   <select
                     value={options.gender}
-                    onChange={(e) => setOptions({ ...options, gender: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, gender: e.target.value as FormFillerProfileOptions['gender'] })}
                   >
                     <option value="random">Acak</option>
                     <option value="male">Laki-laki</option>
@@ -477,7 +505,7 @@ export default function ToolsPage() {
                   <label>Format:</label>
                   <select
                     value={options.nameStyle}
-                    onChange={(e) => setOptions({ ...options, nameStyle: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, nameStyle: e.target.value as FormFillerProfileOptions['nameStyle'] })}
                   >
                     <option value="full">Nama Lengkap</option>
                     <option value="first">Nama Depan</option>
@@ -523,7 +551,7 @@ export default function ToolsPage() {
                   <label>Gaya:</label>
                   <select
                     value={options.emailStyle}
-                    onChange={(e) => setOptions({ ...options, emailStyle: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, emailStyle: e.target.value as FormFillerProfileOptions['emailStyle'] })}
                   >
                     <option value="name">Sesuai Nama</option>
                     <option value="word">Kombinasi Kata</option>
@@ -634,7 +662,7 @@ export default function ToolsPage() {
                   <label>Format:</label>
                   <select
                     value={options.phoneFormat}
-                    onChange={(e) => setOptions({ ...options, phoneFormat: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, phoneFormat: e.target.value as FormFillerProfileOptions['phoneFormat'] })}
                   >
                     <option value="dash">0812-3456-7890</option>
                     <option value="space">0812 3456 7890</option>
@@ -694,7 +722,7 @@ export default function ToolsPage() {
                   <label>Format:</label>
                   <select
                     value={options.dateFormat}
-                    onChange={(e) => setOptions({ ...options, dateFormat: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, dateFormat: e.target.value as FormFillerProfileOptions['dateFormat'] })}
                   >
                     <option value="id">15 Januari 1995</option>
                     <option value="iso">1995-01-15</option>
@@ -728,7 +756,7 @@ export default function ToolsPage() {
                   <label>Gaya:</label>
                   <select
                     value={options.usernameStyle}
-                    onChange={(e) => setOptions({ ...options, usernameStyle: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, usernameStyle: e.target.value as FormFillerProfileOptions['usernameStyle'] })}
                   >
                     <option value="name_num">nama_angka (budi_12)</option>
                     <option value="word_word">kata_kata (cool_wolf)</option>
@@ -762,7 +790,7 @@ export default function ToolsPage() {
                   <label>Detil:</label>
                   <select
                     value={options.addressType}
-                    onChange={(e) => setOptions({ ...options, addressType: e.target.value as any })}
+                    onChange={(e) => setOptions({ ...options, addressType: e.target.value as FormFillerProfileOptions['addressType'] })}
                   >
                     <option value="full">Lengkap (Jl + Kota + Prov)</option>
                     <option value="street">Nama Jalan Saja</option>
@@ -1038,7 +1066,7 @@ export default function ToolsPage() {
                 <path d="M7 8h10M7 12h8M7 16h6" />
               </svg>
             </div>
-            <p>Belum ada data. Silakan pilih field lalu tekan "Generate & Simpan Supabase".</p>
+            <p>Belum ada data. Silakan pilih field lalu tekan &quot;Generate &amp; Simpan Supabase&quot;.</p>
           </div>
         ) : (
           <div className="profile-cards-list">
@@ -1163,15 +1191,28 @@ export default function ToolsPage() {
         )}
       </section>
 
-      <SecureDeleteModal
-        isOpen={!!deleteTarget}
-        title={deleteTarget?.mode === 'all' ? 'Hapus Semua Profil' : 'Hapus Profil'}
-        itemDescription={deleteTarget?.label || ''}
-        onConfirm={handleConfirmDelete}
-        onClose={() => setDeleteTarget(null)}
-      />
+      {deleteTarget && (
+        <SecureDeleteModal
+          isOpen={!!deleteTarget}
+          title={deleteTarget?.mode === 'all' ? 'Hapus Semua Profil' : 'Hapus Profil'}
+          itemDescription={deleteTarget?.label || ''}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
 
       <Toast message={toastMessage} />
+
+      {notice && (
+        <NoticePopup
+          open={!!notice}
+          title={notice.title}
+          message={notice.message}
+          onClose={() => setNotice(null)}
+        />
+      )}
+
+      <AiAssistant topic="tools" title="AI Bantuan GeneratPro" />
     </div>
   );
 }

@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RandMail
 
-## Getting Started
+Generator acak berbasis web: email & password, password vault, profil form-filler,
+nota penjualan (Invoc), sertifikat, dan dokumen ber-kopsurat.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js 16 (App Router, Turbopack) + React 19 + TypeScript
+- PostgreSQL lokal (`pg`) sebagai database utama; Supabase sebagai opsi provider data
+- Auth: JWT + cookie httpOnly, password di-hash bcrypt
+- AI assistant: OpenAI / Anthropic / Gemini / Groq / DeepSeek / Mistral / xAI /
+  OpenRouter / Ollama / LM Studio / Custom (OpenAI-compatible), dengan mode
+  panduan offline bila API key belum diisi
+
+## Struktur
+
+```
+src/app/              Halaman & API route
+  dashboard/          Ringkasan, monitoring, koneksi DB & AI, cleanup
+  dashboard/generate  GeneratMail (email + password acak)
+  pass/               GeneratPass (password vault)
+  tools/              GeneratPro (profil + autofill form)
+  nota/               Invoc (nota penjualan)
+  sertif/             GeneratSertif (sertifikat dari daftar nama)
+  doc/                GeneratDoc (dokumen + kopsurat)
+  history/            Riwayat gabungan
+  api/                accounts, vault, profiles, auth/*, admin/*, health, usage, ai/chat
+src/components/       Navbar, AuthForm, AiAssistant, NoticePopup, modal verifikasi, dsb.
+src/lib/              db, dataProvider, session, ai, usage, schema.sql, generator
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Menjalankan
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Lokal
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run db:setup     # buat tabel dari src/lib/schema.sql (butuh DATABASE_URL)
+npm run dev
+```
 
-## Learn More
+Buka http://localhost:3000
 
-To learn more about Next.js, take a look at the following resources:
+### Docker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose up -d
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Layanan: http://localhost:9012 (db Postgres di port 5432).
 
-## Deploy on Vercel
+## Variabel Lingkungan
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Lihat `.env.example`. Nilai yang dipakai:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variabel | Fungsi |
+| --- | --- |
+| `DATABASE_URL` | Koneksi PostgreSQL (host/port/user/password/database) |
+| `JWT_SECRET` | Kunci penandatanganan token sesi |
+| `AI_PROVIDER` / `AI_MODEL` / `AI_BASE_URL` / `AI_API_KEY` | Override opsional kunci AI dari environment |
+
+Koneksi database & kunci AI juga bisa diatur lewat Dashboard → Koneksi Database & AI
+(tersimpan di tabel `app_settings`).
+
+## Script
+
+| Perintah | Keterangan |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Build produksi |
+| `npm run start` | Jalankan hasil build |
+| `npm run lint` | ESLint |
+| `npm run db:setup` | Terapkan `src/lib/schema.sql` ke database |
+
+## Mode Demo
+
+Halaman login menyediakan kredensial demo (akun demo tanpa baris di database),
+berguna untuk mencoba aplikasi saat PostgreSQL belum tersedia.

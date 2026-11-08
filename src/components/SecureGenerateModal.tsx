@@ -28,7 +28,7 @@ export default function SecureGenerateModal({
   const [step, setStep] = useState<1 | 2>(1);
   const [passwordInput, setPasswordInput] = useState('');
   const [captchaInput, setCaptchaInput] = useState('');
-  const [captchaText, setCaptchaText] = useState('');
+  const [captchaText, setCaptchaText] = useState(() => generateCaptchaText(6));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -98,17 +98,6 @@ export default function SecureGenerateModal({
       ctx.fillRect(0, y, w, 1);
     }
   }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      const text = generateCaptchaText(6);
-      setCaptchaText(text);
-      setCaptchaInput('');
-      setErrorMsg(null);
-      setStep(1);
-      setPasswordInput('');
-    }
-  }, [isOpen]);
 
   useEffect(() => {
     if (step === 2 && captchaText) {

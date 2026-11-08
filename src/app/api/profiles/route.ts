@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { getDataProvider } from '@/lib/dataProvider';
 import { getSessionUser } from '@/lib/session';
 
 // GET /api/profiles      — list profiles
@@ -28,48 +28,28 @@ export async function GET(request: NextRequest) {
   const user = await getSessionUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const result = await query(
-    `SELECT id, gender, fullname, email, password, phone, birthdate, username,
-            address, job, nik, hobby, education, religion, form_link, created_at
-     FROM form_profiles
-     WHERE user_id = $1
-     ORDER BY created_at DESC`,
-    [user.id]
-  );
-  return NextResponse.json({ data: result.rows });
+  try {
+    const provider = await getDataProvider('profiles');
+    const data = await provider.list(user.id);
+    return NextResponse.json({ data });
+  } catch {
+    return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json();
-  const items: ProfileFields[] = Array.isArray(body) ? body : [body];
-
-  const values: string[] = [];
-  const params: (string | number | null)[] = [user.id];
-  let paramIdx = 2;
-
-  const fields = [
-    'gender', 'fullname', 'email', 'password', 'phone', 'birthdate',
-    'username', 'address', 'job', 'nik', 'hobby', 'education', 'religion', 'form_link',
-  ];
-
-  for (const item of items) {
-    const placeholders = fields.map(() => `$${paramIdx++}`).join(', ');
-    values.push(`($1, ${placeholders})`);
-    const fieldValues = fields.map((f) => item[f as keyof ProfileFields] ?? null);
-    params.push(...fieldValues);
+  try {
+    const body = await request.json();
+    const items: ProfileFields[] = Array.isArray(body) ? body : [body];
+    const provider = await getDataProvider('profiles');
+    const data = await provider.insert(user.id, items as Record<string, unknown>[]);
+    return NextResponse.json({ data });
+  } catch {
+    return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
   }
-
-  const result = await query(
-    `INSERT INTO form_profiles
-       (user_id, ${fields.join(', ')})
-     VALUES ${values.join(', ')}
-     RETURNING id, ${fields.join(', ')}, created_at`,
-    params
-  );
-  return NextResponse.json({ data: result.rows });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -80,14 +60,20 @@ export async function DELETE(request: NextRequest) {
   const id = searchParams.get('id');
   const all = searchParams.get('all') === 'true';
 
-  if (all) {
-    await query('DELETE FROM form_profiles WHERE user_id = $1', [user.id]);
-    return NextResponse.json({ deleted: true });
-  }
+  try {
+    const provider = await getDataProvider('profiles');
 
-  if (id) {
-    await query('DELETE FROM form_profiles WHERE id = $1 AND user_id = $2', [id, user.id]);
-    return NextResponse.json({ deleted: true });
+    if (all) {
+      await provider.deleteAll(user.id);
+      return NextResponse.json({ deleted: true });
+    }
+
+    if (id) {
+      await provider.deleteById(user.id, id);
+      return NextResponse.json({ deleted: true });
+    }
+  } catch {
+    return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
   }
 
   return NextResponse.json({ error: 'Missing id' }, { status: 400 });

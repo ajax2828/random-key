@@ -5,7 +5,10 @@ import { PasswordOptions, generatePassword } from '@/lib/generators';
 import Toast from '@/components/Toast';
 import SecureGenerateModal from '@/components/SecureGenerateModal';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
+import NoticePopup from '@/components/NoticePopup';
+import AiAssistant from '@/components/AiAssistant';
 import { localApiClient } from '@/utils/supabase/client';
+import { trackUsage } from '@/lib/usage';
 
 interface SavedPasswordItem {
   id: string;
@@ -18,6 +21,28 @@ interface SavedPasswordItem {
   use_numbers: boolean;
   use_symbols: boolean;
   created_at: string;
+}
+
+const GUEST_VAULT_KEY = 'generatpass_guest_vault_v1';
+
+function loadGuestVault(): SavedPasswordItem[] {
+  try {
+    const raw = window.localStorage.getItem(GUEST_VAULT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SavedPasswordItem[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((i) => i && typeof i.password === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestVault(items: SavedPasswordItem[]) {
+  try {
+    window.localStorage.setItem(GUEST_VAULT_KEY, JSON.stringify(items));
+  } catch {
+    // storage penuh / private mode — abaikan, hasil tetap ditampilkan
+  }
 }
 
 export default function GeneratPassPage() {
@@ -34,6 +59,8 @@ export default function GeneratPassPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
+  const [isGuest, setIsGuest] = useState(true);
 
   // Modals state
   const [isGenModalOpen, setIsGenModalOpen] = useState(false);
@@ -44,24 +71,39 @@ export default function GeneratPassPage() {
     setTimeout(() => setToastMessage(null), 2200);
   }, []);
 
-  // Fetch passwords from local API (password_vault)
-  const loadVault = useCallback(async () => {
-    try {
-      const res = await fetch('/api/vault');
-      if (!res.ok) {
-        console.warn('Vault fetch notice:', res.status);
-        return;
-      }
-      const { data } = await res.json() as { data: SavedPasswordItem[] };
-      setResults(data || []);
-    } catch (err) {
-      console.error('Error loading vault:', err);
-    }
-  }, []);
-
+  // Fetch passwords: server vault untuk user login, localStorage untuk tamu
   useEffect(() => {
-    loadVault();
-  }, [loadVault]);
+    let ignore = false;
+
+    (async () => {
+      try {
+        const user = await localApiClient.getUser();
+        if (ignore) return;
+        setIsGuest(!user);
+
+        if (!user) {
+          setResults(loadGuestVault());
+          return;
+        }
+
+        const res = await fetch('/api/vault');
+        if (!res.ok) {
+          console.warn('Vault fetch notice:', res.status);
+          return;
+        }
+        const { data } = await res.json() as { data: SavedPasswordItem[] };
+        if (!ignore) {
+          setResults(data || []);
+        }
+      } catch (err) {
+        console.error('Error loading vault:', err);
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   // Evaluate password strength
   const getStrengthLabel = (opts: PasswordOptions): string => {
@@ -94,6 +136,7 @@ export default function GeneratPassPage() {
       const user = await localApiClient.getUser();
       const generatedPass = generatePassword(passOpts);
       const strength = getStrengthLabel(passOpts);
+      trackUsage('pass', 'generate');
 
       if (user) {
         const toInsert = {
@@ -133,6 +176,10 @@ export default function GeneratPassPage() {
             };
             setResults((prev) => [fallbackItem, ...prev]);
             showToast('Password dibuat secara lokal! (Notice DB)');
+            setNotice({
+              title: 'Data Tidak Tersimpan ke Database',
+              message: 'Koneksi ke database tidak tersedia, jadi password yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Salin password sebelum menutup halaman.',
+            });
           }
         } catch (err) {
           console.warn('Vault insert fallback (local):', err);
@@ -150,6 +197,10 @@ export default function GeneratPassPage() {
           };
           setResults((prev) => [fallbackItem, ...prev]);
           showToast('Password dibuat secara lokal! (Notice DB)');
+          setNotice({
+            title: 'Data Tidak Tersimpan ke Database',
+            message: 'Database tidak dapat dijangkau, jadi password yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Salin password sebelum menutup halaman.',
+          });
         }
       } else {
         const localItem: SavedPasswordItem = {
@@ -164,8 +215,12 @@ export default function GeneratPassPage() {
           use_symbols: passOpts.useSymbols,
           created_at: new Date().toISOString(),
         };
-        setResults((prev) => [localItem, ...prev]);
-        showToast('Password berhasil dibuat!');
+        setResults((prev) => {
+          const next = [localItem, ...prev];
+          saveGuestVault(next);
+          return next;
+        });
+        showToast('Password berhasil dibuat & tersimpan di browser!');
       }
 
       setLabelInput('');
@@ -222,15 +277,23 @@ export default function GeneratPassPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      await fetch('/api/vault?all=true', { method: 'DELETE' });
+      if (!isGuest) {
+        await fetch('/api/vault?all=true', { method: 'DELETE' });
+      }
       setResults([]);
+      saveGuestVault([]);
       showToast('Semua password di vault berhasil dihapus!');
     } else {
       const { id } = deleteTarget;
-      if (!id.startsWith('local-')) {
+      if (!isGuest && !id.startsWith('local-')) {
         await fetch(`/api/vault?id=${id}`, { method: 'DELETE' });
       }
-      setResults((prev) => prev.filter((item) => item.id !== id));
+      setResults((prev) => {
+        const next = prev.filter((item) => item.id !== id);
+        // Selalu sinkronkan localStorage agar vault tamu tetap konsisten
+        saveGuestVault(next.filter((item) => item.id.startsWith('local-')));
+        return next;
+      });
       showToast('Password berhasil dihapus!');
     }
   };
@@ -248,13 +311,17 @@ export default function GeneratPassPage() {
           </div>
           <div>
             <h2 className="page-hero-title">GeneratPass</h2>
-            <p className="page-hero-sub">Generator Password Tunggal (1 per 1) dengan Verifikasi 2-Langkah & Local Vault</p>
+            <p className="page-hero-sub">Generator Password Tunggal (1 per 1) dengan Verifikasi 2-Langkah & Local Vault — bisa digunakan tanpa login</p>
           </div>
         </div>
         <div className="page-hero-badges">
           <span className="hero-badge badge-cyan">🔒 1-by-1 Secure</span>
           <span className="hero-badge badge-violet">🛡️ Verifikasi 2-Langkah</span>
-          <span className="hero-badge badge-emerald">💾 Local Vault</span>
+          {isGuest ? (
+            <span className="hero-badge badge-emerald">👤 Mode Tamu — Tanpa Login</span>
+          ) : (
+            <span className="hero-badge badge-emerald">💾 Local Vault</span>
+          )}
         </div>
       </section>
 
@@ -374,7 +441,7 @@ export default function GeneratPassPage() {
       <section className="results-section">
         <div className="results-header">
           <div className="results-header-left">
-            <h3>Vault Password Tersimpan</h3>
+            <h3>Vault Password Tersimpan{isGuest ? ' (Browser Ini)' : ''}</h3>
             {results.length > 0 && (
               <span className="results-count-badge">{results.length} password</span>
             )}
@@ -407,7 +474,7 @@ export default function GeneratPassPage() {
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </div>
-            <p>Belum ada password tersimpan di vault. Klik "Generate 1 Password" di atas.</p>
+            <p>Belum ada password tersimpan di vault. Klik &quot;Generate 1 Password&quot; di atas.</p>
           </div>
         ) : (
           <div className="pass-vault-list">
@@ -472,23 +539,38 @@ export default function GeneratPassPage() {
       </section>
 
       {/* 2-Step Generate Modal */}
-      <SecureGenerateModal
-        isOpen={isGenModalOpen}
-        onConfirm={handleConfirmedGenerate}
-        onClose={() => setIsGenModalOpen(false)}
-        label={labelInput.trim() || undefined}
-      />
+      {isGenModalOpen && (
+        <SecureGenerateModal
+          isOpen={isGenModalOpen}
+          onConfirm={handleConfirmedGenerate}
+          onClose={() => setIsGenModalOpen(false)}
+          label={labelInput.trim() || undefined}
+        />
+      )}
 
       {/* 2-Step Delete Modal */}
-      <SecureDeleteModal
-        isOpen={!!deleteTarget}
-        title={deleteTarget?.mode === 'all' ? 'Hapus Semua Password Vault' : 'Hapus Password Vault'}
-        itemDescription={deleteTarget?.label || ''}
-        onConfirm={handleConfirmDelete}
-        onClose={() => setDeleteTarget(null)}
-      />
+      {deleteTarget && (
+        <SecureDeleteModal
+          isOpen={!!deleteTarget}
+          title={deleteTarget?.mode === 'all' ? 'Hapus Semua Password Vault' : 'Hapus Password Vault'}
+          itemDescription={deleteTarget?.label || ''}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
 
       <Toast message={toastMessage} />
+
+      {notice && (
+        <NoticePopup
+          open={!!notice}
+          title={notice.title}
+          message={notice.message}
+          onClose={() => setNotice(null)}
+        />
+      )}
+
+      <AiAssistant topic="pass" title="AI Bantuan GeneratPass" />
     </div>
   );
 }

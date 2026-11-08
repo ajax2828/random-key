@@ -54,8 +54,9 @@ export const localApiClient = {
       const data = await res.json();
       if (!res.ok) return { user: null, error: data.error || 'Login failed' };
       return { user: data.user };
-    } catch (err: any) {
-      return { user: null, error: err?.message || 'Login failed' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      return { user: null, error: message };
     }
   },
 
@@ -68,8 +69,9 @@ export const localApiClient = {
       const data = await res.json();
       if (!res.ok) return { user: null, error: data.error || 'Register failed' };
       return { user: data.user };
-    } catch (err: any) {
-      return { user: null, error: err?.message || 'Register failed' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Register failed';
+      return { user: null, error: message };
     }
   },
 

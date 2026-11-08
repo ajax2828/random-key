@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { DEMO_EMAIL, DEMO_USER_ID, DEMO_FULL_NAME } from './demo';
 
 const TOKEN_KEY = 'randmail_session';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
@@ -60,12 +61,52 @@ export async function createSession(userId: string) {
 }
 
 /**
+ * Create a demo/dummy session (JWT cookie only, no DB rows).
+ * Lets the app be fully usable for testing even without PostgreSQL.
+ */
+export async function createDemoSession(email: string): Promise<SessionUser> {
+  const { sign } = await getJwt();
+
+  const token = sign({ uid: DEMO_USER_ID, email, demo: true }, JWT_SECRET, {
+    expiresIn: '30d',
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set(TOKEN_KEY, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: SESSION_TTL_MS / 1000,
+    path: '/',
+  });
+
+  return {
+    id: DEMO_USER_ID,
+    email,
+    full_name: DEMO_FULL_NAME,
+    role: 'user',
+    status: 'active',
+  };
+}
+
+/**
  * Verify the JWT token and return the session user (or null).
+ * Demo tokens are accepted without a database lookup.
  */
 export async function verifySession(token: string): Promise<SessionUser | null> {
   try {
     const { verify } = await getJwt();
-    const payload = verify(token, JWT_SECRET) as { uid: string; email: string };
+    const payload = verify(token, JWT_SECRET) as { uid: string; email: string; demo?: boolean };
+
+    if (payload.demo) {
+      return {
+        id: payload.uid || DEMO_USER_ID,
+        email: payload.email || DEMO_EMAIL,
+        full_name: DEMO_FULL_NAME,
+        role: 'user',
+        status: 'active',
+      };
+    }
 
     // Check DB session still valid
     const sessionRes = await query(
@@ -114,7 +155,11 @@ export async function clearSession() {
   // Delete from DB if token present
   const token = cookieStore.get(TOKEN_KEY)?.value;
   if (token) {
-    await query('DELETE FROM sessions WHERE token = $1', [token]);
+    try {
+      await query('DELETE FROM sessions WHERE token = $1', [token]);
+    } catch {
+      // DB unavailable (demo mode) — cookie is cleared anyway
+    }
   }
 }
 
@@ -124,7 +169,7 @@ export async function clearSession() {
  */
 export async function middlewareUpdateSession(
   request: NextRequest,
-  protectedPaths: string[] = ['/dashboard', '/pass', '/history', '/tools', '/sertif', '/nota']
+  protectedPaths: string[] = ['/dashboard', '/history', '/tools', '/sertif', '/nota']
 ): Promise<NextResponse> {
   const response = NextResponse.next({ request });
   const token = request.cookies.get(TOKEN_KEY)?.value;

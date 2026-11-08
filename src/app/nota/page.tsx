@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import AiAssistant from '@/components/AiAssistant';
+import { trackUsage } from '@/lib/usage';
 
 interface Barang {
   id: string;
@@ -57,6 +59,7 @@ export default function NotaPage() {
   };
 
   const handlePrint = () => {
+    trackUsage('nota', 'print');
     window.print();
   };
 
@@ -255,6 +258,8 @@ export default function NotaPage() {
           </div>
         </div>
       </div>
+
+      <AiAssistant topic="nota" title="AI Bantuan GeneratNota" />
     </div>
   );
 }

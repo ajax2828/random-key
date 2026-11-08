@@ -3,6 +3,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import JSZip from 'jszip';
 import Toast from '@/components/Toast';
+import AiAssistant from '@/components/AiAssistant';
+import { trackUsage } from '@/lib/usage';
 import {
   CertConfig,
   CertData,
@@ -100,6 +102,7 @@ export default function SertifPage() {
 
     setIsGenerating(true);
     const results: Array<{ name: string; blob: Blob; url: string }> = [];
+    trackUsage('sertif', 'generate');
 
     try {
       for (let i = 0; i < csvData.length; i++) {
@@ -671,6 +674,8 @@ export default function SertifPage() {
       )}
 
       <Toast message={toastMessage} />
+
+      <AiAssistant topic="sertif" title="AI Bantuan GeneratSertif" />
     </div>
   );
 }

@@ -7,7 +7,6 @@ import {
   JOBS_BY_SECTOR,
   HOBBIES,
   RELIGIONS,
-  EDUCATION_LEVELS,
   PHONE_PREFIXES,
 } from './indonesianData';
 

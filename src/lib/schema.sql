@@ -90,3 +90,26 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+-- -----------------------------------------
+-- app_settings  (koneksi DB + konfigurasi AI)
+-- -----------------------------------------
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT,
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- -----------------------------------------
+-- usage_log  (pemakaian per generator)
+--  user_id bertipe TEXT agar tetap bisa dipakai mode demo / multi-provider
+-- -----------------------------------------
+CREATE TABLE IF NOT EXISTS usage_log (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     TEXT NOT NULL,
+    tool        TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_usage_user_created ON usage_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_usage_tool ON usage_log(tool);

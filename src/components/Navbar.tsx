@@ -29,13 +29,9 @@ export default function Navbar({ user }: NavbarProps) {
     });
   }, [user]);
 
-  // Close menus when route changes
-  useEffect(() => {
+  const handleLogout = async () => {
     setMobileOpen(false);
     setDesktopOpen(false);
-  }, [pathname]);
-
-  const handleLogout = async () => {
     await localApiClient.signOut();
     router.push('/login');
     router.refresh();

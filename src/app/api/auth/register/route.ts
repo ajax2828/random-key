@@ -38,7 +38,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ user });
   } catch (err: unknown) {
     console.error('Register error:', err);
-    const message = err instanceof Error ? err.message : 'Terjadi kesalahan';
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : 'Terjadi kesalahan saat registrasi. Pastikan database aktif dan coba lagi.';
     return NextResponse.json(
       { error: message },
       { status: 500 }

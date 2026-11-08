@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { comparePassword } from '@/lib/auth-utils';
-import { createSession } from '@/lib/session';
+import { createSession, createDemoSession } from '@/lib/session';
+import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/demo';
 
 // POST /api/auth/login
 export async function POST(request: NextRequest) {
@@ -13,6 +14,11 @@ export async function POST(request: NextRequest) {
         { error: 'Email dan password wajib diisi' },
         { status: 400 }
       );
+    }
+
+    if (email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+      const demoUser = await createDemoSession(email.trim().toLowerCase());
+      return NextResponse.json({ user: demoUser, demo: true });
     }
 
     const result = await query(
@@ -57,7 +63,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ user: safeUser });
   } catch (err: unknown) {
     console.error('Login error:', err);
-    const message = err instanceof Error ? err.message : 'Terjadi kesalahan saat login';
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : 'Terjadi kesalahan saat login. Pastikan database aktif dan coba lagi.';
     return NextResponse.json(
       { error: message },
       { status: 500 }
