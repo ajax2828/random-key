@@ -10,7 +10,7 @@ import {
 } from '@/lib/formFillerGenerator';
 import Toast from '@/components/Toast';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
-import NoticePopup from '@/components/NoticePopup';
+import { NoticeProvider, useNotice } from '@/components/NoticeNotification';
 import AiAssistant from '@/components/AiAssistant';
 import { localApiClient } from '@/utils/supabase/client';
 import { trackUsage } from '@/lib/usage';
@@ -63,7 +63,7 @@ export default function ToolsPage() {
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
+
 
   // Delete state for SecureDeleteModal
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string; mode: 'single' | 'all' } | null>(null);
@@ -72,6 +72,8 @@ export default function ToolsPage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2400);
   };
+
+  const { showNotice } = useNotice();
 
   // Load profiles from local database on page load
   useEffect(() => {
@@ -156,33 +158,24 @@ export default function ToolsPage() {
           });
           const result = await res.json();
           if (res.ok && result.data) {
-            showToast(`Tersimpan ${result.data.length} profil di database!`);
+            showNotice('Data Tersimpan', `Tersimpan ${result.data.length} profil di database!`);
             setResults((prev) => [...(result.data as GeneratedProfile[]), ...prev]);
           } else {
             console.warn('Profile save notice (fallback local):', result.error || 'unknown');
             showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
             setResults((prev) => [...generatedList, ...prev]);
-            setNotice({
-              title: 'Data Tidak Tersimpan ke Database',
-              message: `Koneksi ke database tidak tersedia, jadi ${quantity} profil yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Gunakan "Salin Semua" atau "Export" sebelum menutup halaman.`,
-            });
+            showToast('Data tidak tersimpan ke database: koneksi tidak tersedia.');
           }
         } catch (err) {
           console.warn('Profile save fallback (local):', err);
           showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
           setResults((prev) => [...generatedList, ...prev]);
-          setNotice({
-            title: 'Data Tidak Tersimpan ke Database',
-            message: `Database tidak dapat dijangkau, jadi ${quantity} profil yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Gunakan "Salin Semua" atau "Export" sebelum menutup halaman.`,
-          });
+          showToast('Data tidak tersimpan ke database: koneksi tidak dapat dijangkau.');
         }
       } else {
         setResults((prev) => [...generatedList, ...prev]);
         showToast(`Generated ${quantity} data!`);
-        setNotice({
-          title: 'Data Tidak Tersimpan ke Database',
-          message: `Anda belum login, jadi ${quantity} profil yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Log in terlebih dahulu agar profil tersimpan ke database.`,
-        });
+        showToast('Data tidak tersimpan ke database: belum login. Log in terlebih dahulu.');
       }
 
       if (generatedList.length > 0) {
@@ -380,6 +373,7 @@ export default function ToolsPage() {
   };
 
   return (
+    <NoticeProvider>
     <div className="formfill-container">
       {/* Page Hero Header */}
       <section className="page-hero-header">
@@ -1203,16 +1197,8 @@ export default function ToolsPage() {
 
       <Toast message={toastMessage} />
 
-      {notice && (
-        <NoticePopup
-          open={!!notice}
-          title={notice.title}
-          message={notice.message}
-          onClose={() => setNotice(null)}
-        />
-      )}
-
       <AiAssistant topic="tools" title="AI Bantuan GeneratPro" />
     </div>
+    </NoticeProvider>
   );
 }

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { localApiClient } from '@/utils/supabase/client';
-import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/demo';
+import { useNotice } from './NoticeNotification';
 
 interface AuthFormProps {
   type: 'login' | 'register';
@@ -19,6 +19,7 @@ export default function AuthForm({ type }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
+  const { showNotice } = useNotice();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +48,7 @@ export default function AuthForm({ type }: AuthFormProps) {
 
         if (user) {
           setSuccess('Pendaftaran berhasil! Mengalihkan ke dashboard...');
+          showNotice('Pendaftaran berhasil', 'Akun terdaftar dan data tersimpan di database.');
           setTimeout(() => {
             router.push('/dashboard');
             router.refresh();
@@ -135,17 +137,6 @@ export default function AuthForm({ type }: AuthFormProps) {
           )}
         </div>
 
-        {type === 'login' && (
-          <div className="demo-credentials-box">
-            <span className="demo-credentials-title">Kredensial Demo</span>
-            <span className="demo-credentials-row">
-              Email: <code>{DEMO_EMAIL}</code>
-            </span>
-            <span className="demo-credentials-row">
-              Password: <code>{DEMO_PASSWORD}</code>
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );

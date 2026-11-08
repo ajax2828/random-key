@@ -2136,6 +2136,26 @@ input:checked + .slider:before {
   line-height: 1.6;
 }
 
+/* ===== Success notification popup (2 detik) ===== */
+.success-popup-card {
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.success-popup-icon {
+  background: rgba(52, 211, 153, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: #34d399;
+}
+.success-popup-title,
+.success-popup-subtitle {
+  color: #34d399;
+}
+.success-popup-message {
+  font-size: 0.88rem;
+  color: #bbf7d0;
+  line-height: 1.6;
+}
+
 .modal-form-step {
   display: flex;
   flex-direction: column;

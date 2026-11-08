@@ -7,7 +7,7 @@ import EmailSettings from '@/components/EmailSettings';
 import PasswordSettings from '@/components/PasswordSettings';
 import GenerateControls from '@/components/GenerateControls';
 import ResultsList from '@/components/ResultsList';
-import NoticePopup from '@/components/NoticePopup';
+import { NoticeProvider, useNotice } from '@/components/NoticeNotification';
 import AiAssistant from '@/components/AiAssistant';
 import { CredentialPair } from '@/components/ResultItem';
 import { localApiClient } from '@/utils/supabase/client';
@@ -42,13 +42,14 @@ export default function GeneratePage() {
   const [results, setResults] = useState<CredentialPair[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string; mode?: 'single' | 'all' } | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2200);
   }, []);
+
+  const { showNotice } = useNotice();
 
   // Load existing credentials from local API on mount
   useEffect(() => {
@@ -114,32 +115,23 @@ export default function GeneratePage() {
           const result = await res.json();
           if (res.ok && result.data) {
             setResults((prev) => [...result.data, ...prev]);
-            showToast(`Tersimpan ${result.data.length} pasangan di database!`);
+            showNotice('Data Tersimpan', `Tersimpan ${result.data.length} pasangan ke database!`);
           } else {
             // Fallback to local-only
             setResults((prev) => [...generatedList, ...prev]);
             showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
-            setNotice({
-              title: 'Data Tidak Tersimpan ke Database',
-              message: `Koneksi ke database tidak tersedia, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Ekspor CSV" sebelum menutup halaman.`,
-            });
+            showToast('Data tidak tersimpan ke database: koneksi tidak tersedia.');
           }
         } catch (err) {
           console.warn('Save fallback (local):', err);
           setResults((prev) => [...generatedList, ...prev]);
           showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
-          setNotice({
-            title: 'Data Tidak Tersimpan ke Database',
-            message: `Database tidak dapat dijangkau, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Silakan gunakan tombol "Salin Semua" atau "Ekspor CSV" sebelum menutup halaman.`,
-          });
+          showToast('Data tidak tersimpan ke database: koneksi tidak dapat dijangkau.');
         }
       } else {
         setResults((prev) => [...generatedList, ...prev]);
         showToast(`Generated ${quantity} pasangan!`);
-        setNotice({
-          title: 'Data Tidak Tersimpan ke Database',
-          message: `Anda belum login, jadi ${quantity} data yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Log in terlebih dahulu agar data tersimpan ke database.`,
-        });
+        showToast('Data tidak tersimpan ke database: belum login. Log in terlebih dahulu.');
       }
     } catch (err) {
       console.error('Generation error:', err);
@@ -211,6 +203,7 @@ export default function GeneratePage() {
   };
 
   return (
+    <NoticeProvider>
     <div>
       {/* Page Hero Header */}
       <section className="page-hero-header">
@@ -287,16 +280,8 @@ export default function GeneratePage() {
 
       <Toast message={toastMessage} />
 
-      {notice && (
-        <NoticePopup
-          open={!!notice}
-          title={notice.title}
-          message={notice.message}
-          onClose={() => setNotice(null)}
-        />
-      )}
-
       <AiAssistant topic="mail" title="AI Bantuan GeneratMail" />
     </div>
+    </NoticeProvider>
   );
 }

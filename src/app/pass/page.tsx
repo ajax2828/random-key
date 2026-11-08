@@ -5,7 +5,7 @@ import { PasswordOptions, generatePassword } from '@/lib/generators';
 import Toast from '@/components/Toast';
 import SecureGenerateModal from '@/components/SecureGenerateModal';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
-import NoticePopup from '@/components/NoticePopup';
+import { NoticeProvider, useNotice } from '@/components/NoticeNotification';
 import AiAssistant from '@/components/AiAssistant';
 import { localApiClient } from '@/utils/supabase/client';
 import { trackUsage } from '@/lib/usage';
@@ -59,7 +59,6 @@ export default function GeneratPassPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [isGuest, setIsGuest] = useState(true);
 
   // Modals state
@@ -70,6 +69,8 @@ export default function GeneratPassPage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2200);
   }, []);
+
+  const { showNotice } = useNotice();
 
   // Fetch passwords: server vault untuk user login, localStorage untuk tamu
   useEffect(() => {
@@ -159,7 +160,7 @@ export default function GeneratPassPage() {
           const result = await res.json();
           if (res.ok && result.data && result.data[0]) {
             setResults((prev) => [result.data[0], ...prev]);
-            showToast('Password baru berhasil dibuat & tersimpan di database!');
+            showNotice('Data Tersimpan', 'Password baru tersimpan di database!');
           } else {
             // Fallback to local
             const fallbackItem: SavedPasswordItem = {
@@ -176,10 +177,7 @@ export default function GeneratPassPage() {
             };
             setResults((prev) => [fallbackItem, ...prev]);
             showToast('Password dibuat secara lokal! (Notice DB)');
-            setNotice({
-              title: 'Data Tidak Tersimpan ke Database',
-              message: 'Koneksi ke database tidak tersedia, jadi password yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Salin password sebelum menutup halaman.',
-            });
+            showToast('Data tidak tersimpan ke database: koneksi tidak tersedia.');
           }
         } catch (err) {
           console.warn('Vault insert fallback (local):', err);
@@ -197,10 +195,7 @@ export default function GeneratPassPage() {
           };
           setResults((prev) => [fallbackItem, ...prev]);
           showToast('Password dibuat secara lokal! (Notice DB)');
-          setNotice({
-            title: 'Data Tidak Tersimpan ke Database',
-            message: 'Database tidak dapat dijangkau, jadi password yang dibuat HANYA tampil di halaman ini dan TIDAK tersimpan permanen. Salin password sebelum menutup halaman.',
-          });
+          showToast('Data tidak tersimpan ke database: koneksi tidak dapat dijangkau.');
         }
       } else {
         const localItem: SavedPasswordItem = {
@@ -299,6 +294,7 @@ export default function GeneratPassPage() {
   };
 
   return (
+    <NoticeProvider>
     <div className="formfill-container">
       {/* Page Hero Header */}
       <section className="page-hero-header">
@@ -561,16 +557,8 @@ export default function GeneratPassPage() {
 
       <Toast message={toastMessage} />
 
-      {notice && (
-        <NoticePopup
-          open={!!notice}
-          title={notice.title}
-          message={notice.message}
-          onClose={() => setNotice(null)}
-        />
-      )}
-
       <AiAssistant topic="pass" title="AI Bantuan GeneratPass" />
     </div>
+    </NoticeProvider>
   );
 }

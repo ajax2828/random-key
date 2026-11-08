@@ -1,5 +1,10 @@
 import AuthForm from '@/components/AuthForm';
+import { NoticeProvider } from '@/components/NoticeNotification';
 
 export default function LoginPage() {
-  return <AuthForm type="login" />;
+  return (
+    <NoticeProvider>
+      <AuthForm type="login" />
+    </NoticeProvider>
+  );
 }
