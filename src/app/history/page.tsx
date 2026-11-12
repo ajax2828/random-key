@@ -273,7 +273,7 @@ export default function HistoryPage() {
 
       {loading ? (
         <div className="empty-state">
-          <p>Memuat history dari database...</p>
+          <p>Memuat riwayat data...</p>
         </div>
       ) : filteredHistory.length === 0 ? (
         <div className="empty-state">

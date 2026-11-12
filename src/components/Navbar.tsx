@@ -32,8 +32,8 @@ export default function Navbar({ user }: NavbarProps) {
   const handleLogout = async () => {
     setMobileOpen(false);
     setDesktopOpen(false);
+    // Mode tanpa login: tidak ada session untuk dikeluar — cukup refresh.
     await localApiClient.signOut();
-    router.push('/login');
     router.refresh();
   };
 
@@ -99,7 +99,7 @@ export default function Navbar({ user }: NavbarProps) {
 
   return (
     <header className="navbar">
-      <Link href={user ? '/dashboard' : '/login'} className="logo">
+      <Link href="/dashboard" className="logo">
         <div className="logo-icon">
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
             <rect x="2" y="6" width="28" height="20" rx="3" stroke="url(#grad1)" strokeWidth="2"/>

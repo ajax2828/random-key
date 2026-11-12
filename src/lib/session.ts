@@ -1,12 +1,4 @@
 import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
-import { DEMO_EMAIL, DEMO_USER_ID, DEMO_FULL_NAME } from './demo';
-
-const TOKEN_KEY = 'randmail_session';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
-// 30 day session
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface SessionUser {
   id: string;
@@ -16,131 +8,32 @@ export interface SessionUser {
   status: string;
 }
 
-// Lazily import jsonwebtoken — only when this module runs (server side)
-let jwt: typeof import('jsonwebtoken') | null = null;
-async function getJwt() {
-  if (!jwt) {
-    jwt = await import('jsonwebtoken');
-  }
-  return jwt;
-}
+const TOKEN_KEY = 'randmail_session';
 
 /**
- * Create a session for the given user and persist it to the DB + set cookie.
+ * Mode tanpa login: semua pengunjung aplikasi masuk sebagai pengguna anonim.
+ * Tidak ada JWT, cookie, atau database yang dipakai sama sekali.
  */
-export async function createSession(userId: string) {
-  const { sign } = await getJwt();
-  const userRes = await query(
-    'SELECT id, email, full_name, role, status FROM users WHERE id = $1',
-    [userId]
-  );
-  const user = userRes.rows[0] as SessionUser;
-  if (!user) throw new Error('User not found');
-
-  const token = sign({ uid: user.id, email: user.email }, JWT_SECRET, {
-    expiresIn: '30d',
-  });
-
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-
-  await query(
-    'INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)',
-    [user.id, token, expiresAt]
-  );
-
-  const cookieStore = await cookies();
-  cookieStore.set(TOKEN_KEY, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_TTL_MS / 1000,
-    path: '/',
-  });
-
-  return user;
-}
-
-/**
- * Create a demo/dummy session (JWT cookie only, no DB rows).
- * Lets the app be fully usable for testing even without PostgreSQL.
- */
-export async function createDemoSession(email: string): Promise<SessionUser> {
-  const { sign } = await getJwt();
-
-  const token = sign({ uid: DEMO_USER_ID, email, demo: true }, JWT_SECRET, {
-    expiresIn: '30d',
-  });
-
-  const cookieStore = await cookies();
-  cookieStore.set(TOKEN_KEY, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_TTL_MS / 1000,
-    path: '/',
-  });
-
+export function getAnonymousUser(): SessionUser {
   return {
-    id: DEMO_USER_ID,
-    email,
-    full_name: DEMO_FULL_NAME,
+    id: 'anonymous',
+    email: 'anonymous@randmail.app',
+    full_name: null,
     role: 'user',
     status: 'active',
   };
 }
 
 /**
- * Verify the JWT token and return the session user (or null).
- * Demo tokens are accepted without a database lookup.
+ * Kembali pengguna sesi aktif — selalu mode tanpa login (pengguna anonim).
+ * Tidak pernah null karena aplikasi berjalan tanpa autentikasi.
  */
-export async function verifySession(token: string): Promise<SessionUser | null> {
-  try {
-    const { verify } = await getJwt();
-    const payload = verify(token, JWT_SECRET) as { uid: string; email: string; demo?: boolean };
-
-    if (payload.demo) {
-      return {
-        id: payload.uid || DEMO_USER_ID,
-        email: payload.email || DEMO_EMAIL,
-        full_name: DEMO_FULL_NAME,
-        role: 'user',
-        status: 'active',
-      };
-    }
-
-    // Check DB session still valid
-    const sessionRes = await query(
-      'SELECT s.expires_at, u.id, u.email, u.full_name, u.role, u.status ' +
-      'FROM sessions s JOIN users u ON u.id = s.user_id ' +
-      'WHERE s.token = $1 AND s.expires_at > NOW()',
-      [token]
-    );
-
-    if (sessionRes.rowCount === 0) return null;
-    const row = sessionRes.rows[0];
-    return {
-      id: row.id,
-      email: row.email,
-      full_name: row.full_name,
-      role: row.role,
-      status: row.status,
-    };
-  } catch {
-    return null;
-  }
+export async function getSessionUser(): Promise<SessionUser | null> {
+  return getAnonymousUser();
 }
 
 /**
- * Return the current session user from a NextRequest (middleware / API route).
- */
-export async function getSessionUser(request: NextRequest): Promise<SessionUser | null> {
-  const token = request.cookies.get(TOKEN_KEY)?.value;
-  if (!token) return null;
-  return verifySession(token);
-}
-
-/**
- * Clear the session cookie.
+ * Bersihkan cookie sesi (tidak ada sesi permanen — hanya hapus cookie).
  */
 export async function clearSession() {
   const cookieStore = await cookies();
@@ -151,49 +44,4 @@ export async function clearSession() {
     maxAge: 0,
     path: '/',
   });
-
-  // Delete from DB if token present
-  const token = cookieStore.get(TOKEN_KEY)?.value;
-  if (token) {
-    try {
-      await query('DELETE FROM sessions WHERE token = $1', [token]);
-    } catch {
-      // DB unavailable (demo mode) — cookie is cleared anyway
-    }
-  }
-}
-
-/**
- * Middleware helper: attach session user to NextResponse locals via header.
- * Returns a NextResponse that can be returned from middleware.
- */
-export async function middlewareUpdateSession(
-  request: NextRequest,
-  protectedPaths: string[] = ['/dashboard', '/history', '/tools', '/sertif', '/nota']
-): Promise<NextResponse> {
-  const response = NextResponse.next({ request });
-  const token = request.cookies.get(TOKEN_KEY)?.value;
-
-  let user: SessionUser | null = null;
-  if (token) {
-    user = await verifySession(token);
-  }
-
-  const pathname = request.nextUrl.pathname;
-  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
-  const isAuthPage = pathname === '/login' || pathname === '/register';
-
-  if (isProtected && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  if (isAuthPage && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
-  }
-
-  return response;
 }

@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
   title: 'RandMail — Random Email & Password Generator',
-  description: 'Generate and manage random emails and secure passwords — with local PostgreSQL sync.',
+  description: 'Generate and manage random emails and secure passwords — no login, no database.',
 };
 
 export default async function RootLayout({

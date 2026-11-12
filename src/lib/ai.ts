@@ -1,5 +1,3 @@
-import { AppSettings } from '@/lib/dataProvider';
-
 /* ─────────────────────────────────────────────────────
    Provider catalog — semua AI agent yang didukung
    ───────────────────────────────────────────────────── */
@@ -13,6 +11,13 @@ export interface AiProviderDef {
   requiresKey: boolean;
   defaultModel: string;
   format: AiFormat;
+}
+
+export interface AiSettings {
+  ai_provider: string;
+  ai_model: string;
+  ai_api_key: string;
+  ai_base_url: string;
 }
 
 export const AI_PROVIDERS: AiProviderDef[] = [
@@ -37,7 +42,7 @@ export function getProviderLabel(id: string): string {
   return resolveAiProvider(id).label;
 }
 
-export function canTryLlm(settings: AppSettings): boolean {
+export function canTryLlm(settings: AiSettings): boolean {
   const def = resolveAiProvider(settings.ai_provider);
   if (def.requiresKey) return !!settings.ai_api_key;
   return true;
@@ -72,17 +77,17 @@ interface ToolKB {
 const KB: Record<ToolTopic, ToolKB> = {
   mail: {
     intro:
-      'Halo! Saya asisten GeneratMail. Saya bisa bantu cara generate email & password acak, menyimpan hasil ke database, menyalin semua, atau menghapus data. Tanya apa saja!',
+      'Halo! Saya asisten GeneratMail. Saya bisa bantu cara generate email & password acak, menyalin semua, atau menghapus data. Tanya apa saja!',
     faqs: [
       {
         keywords: ['simpan', 'save', 'database', 'db', 'supabase'],
-        q: 'Bagaimana cara menyimpan hasil generate ke database?',
-        a: 'Klik tombol "Generate & Save". Hasil otomatis disimpan ke database sesuai pengaturan (PostgreSQL lokal atau Supabase) di dashboard. Jika database tidak aktif, data hanya disimpan sementara dan indikator "Belum Tersimpan" akan tampil.',
+        q: 'Bagaimana cara menyimpan hasil generate?',
+        a: 'Hasil generate langsung tampil di daftar hasil (disimpan sementara di sesi browser, tanpa database). Cukup tekan "Generate & Simpan" lalu gunakan tombol salin / hapus di toolbar hasil.',
       },
       {
         keywords: ['hapus', 'delete', 'bersih', 'clear'],
         q: 'Bagaimana cara menghapus hasil?',
-        a: 'Gunakan tombol "Hapus Semua" di toolbar hasil, atau tombol hapus per-item. Proses ini dilindungi verifikasi 2-langkah (password login + captcha).',
+        a: 'Gunakan tombol "Hapus Semua" di toolbar hasil, atau tombol hapus per-item. Proses ini dilindungi verifikasi keamanan (captcha).',
       },
       {
         keywords: ['salin', 'copy', 'clipboard'],
@@ -96,8 +101,8 @@ const KB: Record<ToolTopic, ToolKB> = {
       },
       {
         keywords: ['tidak', 'gagal', 'tidak muncul', 'error', 'tersimpan'],
-        q: 'Hasil tidak tersimpan / muncul popup notifikasi?',
-        a: 'Popup notifikasi berarti data tidak berhasil disimpan ke database (database tidak aktif). Cek status koneksi database di dashboard > Monitoring, lalu mulai ulang PostgreSQL dan setel lewat dashboard > Database.',
+        q: 'Hasil tidak muncul / muncul popup notifikasi?',
+        a: 'Pastikan Anda sudah mengganti tab atau refresh halaman setelah generate. Hasil disimpan sementara di sesi browser dan tidak memakai database.',
       },
     ],
   },
@@ -108,7 +113,7 @@ const KB: Record<ToolTopic, ToolKB> = {
       {
         keywords: ['generate', 'buat', 'password', 'cuat'],
         q: 'Bagaimana cara generate password?',
-        a: 'Atur panjang & kombinasi karakter (huruf besar/kecil, angka, simbol), lalu klik "Generate 1 Password (2-Langkah)". Response ide dengan verifikasi keamanan lalu password tersimpan ke vault.',
+        a: 'Atur panjang & kombinasi karakter (huruf besar/kecil, angka, simbol), lalu klik "Generate 1 Password (Keamanan)". Response ide dengan verifikasi keamanan lalu password tampil di vault.',
       },
       {
         keywords: ['kuat', 'aman', 'strength', 'kekuatan'],
@@ -118,12 +123,12 @@ const KB: Record<ToolTopic, ToolKB> = {
       {
         keywords: ['vault', 'simpan', 'tersimpan'],
         q: 'Password tersimpan di mana?',
-        a: 'Password tersimpan di tabel password_vault di database Anda (lokasi sesuai pengaturan di dashboard). Halaman ini menampilkan "Vault Password Tersimpan".',
+        a: 'Password tersimpan sementara di sesi browser (localStorage) pada halaman ini, tanpa database.',
       },
       {
         keywords: ['hapus', 'delete'],
         q: 'Bagaimana menghapus password di vault?',
-        a: 'Gunakan tombol "Hapus Semua" atau hapus per kartu. Ada verifikasi keamanan 2-langkah.',
+        a: 'Gunakan tombol "Hapus Semua" atau hapus per kartu. Ada verifikasi keamanan (captcha).',
       },
       {
         keywords: ['salin', 'copy'],
@@ -139,7 +144,7 @@ const KB: Record<ToolTopic, ToolKB> = {
       {
         keywords: ['generate', 'profil', 'buat'],
         q: 'Bagaimana cara generate profil?',
-        a: 'Klik "Generate & Simpan Supabase" untuk membuat profil acak lalu simpan ke database, atau tombol autofill untuk langsung mengisi formulir dengan bookmarklet.',
+        a: 'Klik "Generate" untuk membuat profil acak lalu tampilkan di daftar hasil, atau gunakan tombol autofill untuk langsung mengisi formulir dengan bookmarklet.',
       },
       {
         keywords: ['autofill', 'bookmarklet', 'isi formulir', 'form'],
@@ -154,12 +159,12 @@ const KB: Record<ToolTopic, ToolKB> = {
       {
         keywords: ['hapus', 'delete'],
         q: 'Bagaimana menghapus semua profil?',
-        a: 'Tekan "Hapus Semua" di toolbar (dengan verifikasi 2-langkah) untuk menghapus semua profil dari database.',
+        a: 'Tekan "Hapus Semua" di toolbar (dengan verifikasi captcha) untuk membersihkan daftar profil di sesi browser.',
       },
       {
         keywords: ['error', 'gagal', 'tidak tersimpan', 'popup'],
-        q: 'Profil tidak tersimpan ke database?',
-        a: 'Cek status database di dashboard > Monitoring. Jika database tidak aktif, data tidak akan disimpan ke database.',
+        q: 'Profil tidak muncul?',
+        a: 'Pastikan Anda sudah mengganti tab atau refresh halaman setelah generate. Daftar profil ditampilkan dari sesi browser dan tidak memakai database.',
       },
     ],
   },
@@ -259,7 +264,7 @@ export function offlineReply(topic: ToolTopic, userMessage: string): string {
   const msg = userMessage.toLowerCase();
   for (const faq of kb.faqs) {
     if (faq.keywords.some((k) => msg.includes(k.toLowerCase()))) {
-      return `${faq.a}\n\n(Panduan offline — isi API key di dashboard > Database & AI agar dapat jawaban lebih pintar.)`;
+      return `${faq.a}\n\n(Panduan offline — untuk jawaban LLM lebih pintar, isi API key AI di pengaturan aplikasi.)`;
     }
   }
 
@@ -281,7 +286,7 @@ function buildSystemPrompt(topic: ToolTopic): string {
   return `Kamu adalah asisten bantuan untuk aplikasi RandMail, khusus alat "${TOOL_LABELS[topic]}". Jawab dalam Bahasa Indonesia, singkat, jelas, dan ramah. Hindari jawaban panjang.`;
 }
 
-function buildHeaders(def: AiProviderDef, settings: AppSettings): Record<string, string> {
+function buildHeaders(def: AiProviderDef, settings: AiSettings): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (def.requiresKey && settings.ai_api_key) {
     if (def.format === 'anthropic') {
@@ -346,7 +351,7 @@ function extractReply(def: AiProviderDef, data: unknown): string {
  * pemanggil wajib fallback ke offlineReply.
  */
 export async function callLlm(
-  settings: AppSettings,
+  settings: AiSettings,
   topic: ToolTopic,
   messages: ChatMessage[]
 ): Promise<string> {
@@ -379,7 +384,7 @@ export async function callLlm(
    ───────────────────────────────────────────────────── */
 
 export async function pingAi(
-  settings: AppSettings
+  settings: AiSettings
 ): Promise<{ ok: boolean; message: string }> {
   const def = resolveAiProvider(settings.ai_provider);
   const base = settings.ai_base_url || def.baseUrl;

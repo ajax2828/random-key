@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { localApiClient } from '@/utils/supabase/client';
 
 interface SecureGenerateModalProps {
   isOpen: boolean;
@@ -25,8 +24,7 @@ export default function SecureGenerateModal({
   onClose,
   label,
 }: SecureGenerateModalProps) {
-  const [step, setStep] = useState<1 | 2>(1);
-  const [passwordInput, setPasswordInput] = useState('');
+  const [step] = useState<1 | 2>(2);
   const [captchaInput, setCaptchaInput] = useState('');
   const [captchaText, setCaptchaText] = useState(() => generateCaptchaText(6));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -114,45 +112,6 @@ export default function SecureGenerateModal({
     setTimeout(() => drawCaptcha(text), 50);
   };
 
-  const handleVerifyPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    if (!passwordInput) {
-      setErrorMsg('Masukkan password akun login Anda!');
-      return;
-    }
-
-    setIsVerifying(true);
-    try {
-      const user = await localApiClient.getUser();
-      if (!user?.email) {
-        setErrorMsg('Gagal mengambil email akun Anda. Silakan login ulang.');
-        return;
-      }
-
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user.email,
-          password: passwordInput,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setErrorMsg(data.error || 'Password akun login salah!');
-      } else {
-        setStep(2);
-        setErrorMsg(null);
-      }
-    } catch {
-      setErrorMsg('Gagal memverifikasi password.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   const handleConfirmGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -188,7 +147,7 @@ export default function SecureGenerateModal({
           </div>
           <div>
             <h3>Buat Password Baru</h3>
-            <span className="modal-subtitle modal-subtitle-generate">Verifikasi 2-Langkah Diperlukan</span>
+            <span className="modal-subtitle modal-subtitle-generate">Verifikasi Keamanan</span>
           </div>
           <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Tutup modal">
             &times;
@@ -206,7 +165,7 @@ export default function SecureGenerateModal({
           <div className="modal-stepper">
             <div className={`step-item ${step === 1 ? 'active' : 'completed'}`}>
               <span className="step-num">{step > 1 ? '✓' : '1'}</span>
-              <span className="step-name">Password Login</span>
+              <span className="step-name">Konfirmasi</span>
             </div>
             <div className="step-line"></div>
             <div className={`step-item ${step === 2 ? 'active' : ''}`}>
@@ -216,33 +175,6 @@ export default function SecureGenerateModal({
           </div>
 
           {errorMsg && <div className="modal-error-box" role="alert">{errorMsg}</div>}
-
-          {step === 1 && (
-            <form onSubmit={handleVerifyPassword} className="modal-form-step">
-              <p className="step-desc">
-                Masukkan password akun RandMail Anda untuk mengonfirmasi identitas sebelum membuat password baru.
-              </p>
-              <div className="form-group">
-                <label htmlFor="gen-modal-pass">Password Login Akun:</label>
-                <input
-                  id="gen-modal-pass"
-                  type="password"
-                  placeholder="Masukkan password akun Anda"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  autoFocus
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className="modal-footer-actions">
-                <button type="button" className="btn-modal-cancel" onClick={onClose}>Batal</button>
-                <button type="submit" className="btn-modal-next" disabled={isVerifying}>
-                  {isVerifying ? 'Memverifikasi...' : 'Lanjut ke Captcha →'}
-                </button>
-              </div>
-            </form>
-          )}
 
           {step === 2 && (
             <form onSubmit={handleConfirmGenerate} className="modal-form-step">
@@ -277,9 +209,9 @@ export default function SecureGenerateModal({
               </div>
 
               <div className="modal-footer-actions">
-                <button type="button" className="btn-modal-cancel" onClick={() => { setStep(1); setErrorMsg(null); }}>← Kembali</button>
+                <button type="button" className="btn-modal-cancel" onClick={onClose}>Batal</button>
                 <button type="submit" className="btn-modal-generate" disabled={isVerifying}>
-                  {isVerifying ? 'Membuat...' : '🔑 Buat & Simpan Password'}
+                  {isVerifying ? 'Membuat...' : '🔑 Buat Password'}
                 </button>
               </div>
             </form>

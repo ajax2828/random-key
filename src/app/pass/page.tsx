@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { PasswordOptions, generatePassword } from '@/lib/generators';
 import Toast from '@/components/Toast';
 import SecureGenerateModal from '@/components/SecureGenerateModal';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
-import { NoticeProvider, useNotice } from '@/components/NoticeNotification';
+import { NoticeProvider } from '@/components/NoticeNotification';
 import AiAssistant from '@/components/AiAssistant';
-import { localApiClient } from '@/utils/supabase/client';
 import { trackUsage } from '@/lib/usage';
 
 interface SavedPasswordItem {
@@ -55,11 +54,10 @@ export default function GeneratPassPage() {
   });
 
   const [labelInput, setLabelInput] = useState('');
-  const [results, setResults] = useState<SavedPasswordItem[]>([]);
+  const [results, setResults] = useState<SavedPasswordItem[]>(() => loadGuestVault());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-  const [isGuest, setIsGuest] = useState(true);
 
   // Modals state
   const [isGenModalOpen, setIsGenModalOpen] = useState(false);
@@ -68,42 +66,6 @@ export default function GeneratPassPage() {
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2200);
-  }, []);
-
-  const { showNotice } = useNotice();
-
-  // Fetch passwords: server vault untuk user login, localStorage untuk tamu
-  useEffect(() => {
-    let ignore = false;
-
-    (async () => {
-      try {
-        const user = await localApiClient.getUser();
-        if (ignore) return;
-        setIsGuest(!user);
-
-        if (!user) {
-          setResults(loadGuestVault());
-          return;
-        }
-
-        const res = await fetch('/api/vault');
-        if (!res.ok) {
-          console.warn('Vault fetch notice:', res.status);
-          return;
-        }
-        const { data } = await res.json() as { data: SavedPasswordItem[] };
-        if (!ignore) {
-          setResults(data || []);
-        }
-      } catch (err) {
-        console.error('Error loading vault:', err);
-      }
-    })();
-
-    return () => {
-      ignore = true;
-    };
   }, []);
 
   // Evaluate password strength
@@ -130,94 +92,32 @@ export default function GeneratPassPage() {
     setIsGenModalOpen(true);
   };
 
-  // Step 2 of Generation: Confirmed through 2-Step Verification
+  // Step 2 of Generation: Confirmed through security captcha (mode tanpa login)
   const handleConfirmedGenerate = async () => {
     setIsGenerating(true);
     try {
-      const user = await localApiClient.getUser();
       const generatedPass = generatePassword(passOpts);
       const strength = getStrengthLabel(passOpts);
       trackUsage('pass', 'generate');
 
-      if (user) {
-        const toInsert = {
-          label: labelInput.trim() || null,
-          password: generatedPass,
-          length: passOpts.length,
-          strength: strength.replace(/[^a-zA-Z\s]/g, '').trim(),
-          use_upper: passOpts.useUpper,
-          use_lower: passOpts.useLower,
-          use_numbers: passOpts.useNumbers,
-          use_symbols: passOpts.useSymbols,
-        };
-
-        try {
-          const res = await fetch('/api/vault', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(toInsert),
-          });
-          const result = await res.json();
-          if (res.ok && result.data && result.data[0]) {
-            setResults((prev) => [result.data[0], ...prev]);
-            showNotice('Data Tersimpan', 'Password baru tersimpan di database!');
-          } else {
-            // Fallback to local
-            const fallbackItem: SavedPasswordItem = {
-              id: `local-${Date.now()}`,
-              label: labelInput.trim() || 'Password Baru',
-              password: generatedPass,
-              length: passOpts.length,
-              strength: strength,
-              use_upper: passOpts.useUpper,
-              use_lower: passOpts.useLower,
-              use_numbers: passOpts.useNumbers,
-              use_symbols: passOpts.useSymbols,
-              created_at: new Date().toISOString(),
-            };
-            setResults((prev) => [fallbackItem, ...prev]);
-            showToast('Password dibuat secara lokal! (Notice DB)');
-            showToast('Data tidak tersimpan ke database: koneksi tidak tersedia.');
-          }
-        } catch (err) {
-          console.warn('Vault insert fallback (local):', err);
-          const fallbackItem: SavedPasswordItem = {
-            id: `local-${Date.now()}`,
-            label: labelInput.trim() || 'Password Baru',
-            password: generatedPass,
-            length: passOpts.length,
-            strength: strength,
-            use_upper: passOpts.useUpper,
-            use_lower: passOpts.useLower,
-            use_numbers: passOpts.useNumbers,
-            use_symbols: passOpts.useSymbols,
-            created_at: new Date().toISOString(),
-          };
-          setResults((prev) => [fallbackItem, ...prev]);
-          showToast('Password dibuat secara lokal! (Notice DB)');
-          showToast('Data tidak tersimpan ke database: koneksi tidak dapat dijangkau.');
-        }
-      } else {
-        const localItem: SavedPasswordItem = {
-          id: `local-${Date.now()}`,
-          label: labelInput.trim() || 'Password Baru',
-          password: generatedPass,
-          length: passOpts.length,
-          strength: strength,
-          use_upper: passOpts.useUpper,
-          use_lower: passOpts.useLower,
-          use_numbers: passOpts.useNumbers,
-          use_symbols: passOpts.useSymbols,
-          created_at: new Date().toISOString(),
-        };
-        setResults((prev) => {
-          const next = [localItem, ...prev];
-          saveGuestVault(next);
-          return next;
-        });
-        showToast('Password berhasil dibuat & tersimpan di browser!');
-      }
-
+      const localItem: SavedPasswordItem = {
+        id: `local-${Date.now()}`,
+        label: labelInput.trim() || 'Password Baru',
+        password: generatedPass,
+        length: passOpts.length,
+        strength: strength.replace(/[^a-zA-Z\s]/g, '').trim(),
+        use_upper: passOpts.useUpper,
+        use_lower: passOpts.useLower,
+        use_numbers: passOpts.useNumbers,
+        use_symbols: passOpts.useSymbols,
+        created_at: new Date().toISOString(),
+      };
+      setResults((prev) => {
+        const next = [localItem, ...prev];
+        saveGuestVault(next);
+        return next;
+      });
+      showToast('Password berhasil dibuat & tersimpan di browser!');
       setLabelInput('');
     } catch (err) {
       console.error('Password generation error:', err);
@@ -272,21 +172,14 @@ export default function GeneratPassPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      if (!isGuest) {
-        await fetch('/api/vault?all=true', { method: 'DELETE' });
-      }
       setResults([]);
       saveGuestVault([]);
       showToast('Semua password di vault berhasil dihapus!');
     } else {
       const { id } = deleteTarget;
-      if (!isGuest && !id.startsWith('local-')) {
-        await fetch(`/api/vault?id=${id}`, { method: 'DELETE' });
-      }
       setResults((prev) => {
         const next = prev.filter((item) => item.id !== id);
-        // Selalu sinkronkan localStorage agar vault tamu tetap konsisten
-        saveGuestVault(next.filter((item) => item.id.startsWith('local-')));
+        saveGuestVault(next);
         return next;
       });
       showToast('Password berhasil dihapus!');
@@ -307,17 +200,13 @@ export default function GeneratPassPage() {
           </div>
           <div>
             <h2 className="page-hero-title">GeneratPass</h2>
-            <p className="page-hero-sub">Generator Password Tunggal (1 per 1) dengan Verifikasi 2-Langkah & Local Vault — bisa digunakan tanpa login</p>
+            <p className="page-hero-sub">Generator Password Tunggal (1 per 1) dengan Verifikasi Keamanan & Local Vault — tanpa login</p>
           </div>
         </div>
         <div className="page-hero-badges">
           <span className="hero-badge badge-cyan">🔒 1-by-1 Secure</span>
-          <span className="hero-badge badge-violet">🛡️ Verifikasi 2-Langkah</span>
-          {isGuest ? (
-            <span className="hero-badge badge-emerald">👤 Mode Tamu — Tanpa Login</span>
-          ) : (
-            <span className="hero-badge badge-emerald">💾 Local Vault</span>
-          )}
+          <span className="hero-badge badge-violet">🛡️ Verifikasi Keamanan</span>
+          <span className="hero-badge badge-emerald">🆓 Tanpa Database</span>
         </div>
       </section>
 
@@ -415,7 +304,7 @@ export default function GeneratPassPage() {
           <div className="pass-generate-action-bar">
             <div className="qty-notice-box">
               <span className="qty-lock-icon">🔒</span>
-              <span>Jumlah dibatasi <strong>1 per 1</strong> (Verifikasi 2-Langkah Diperlukan)</span>
+              <span>Jumlah dibatasi <strong>1 per 1</strong> (Verifikasi Keamanan)</span>
             </div>
 
             <button
@@ -427,7 +316,7 @@ export default function GeneratPassPage() {
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
-              <span>{isGenerating ? 'Membuat...' : '🔑 Generate 1 Password (2-Langkah)'}</span>
+              <span>{isGenerating ? 'Membuat...' : '🔑 Generate 1 Password (Keamanan)'}</span>
             </button>
           </div>
         </div>
@@ -437,7 +326,7 @@ export default function GeneratPassPage() {
       <section className="results-section">
         <div className="results-header">
           <div className="results-header-left">
-            <h3>Vault Password Tersimpan{isGuest ? ' (Browser Ini)' : ''}</h3>
+            <h3>Vault Password Tersimpan (Browser Ini)</h3>
             {results.length > 0 && (
               <span className="results-count-badge">{results.length} password</span>
             )}

@@ -2,8 +2,8 @@
  * Local API client (replaces Supabase browser client).
  *
  * Provides a thin wrapper around fetch() that talks to the Next.js API routes
- * in this project. Auth is handled via httpOnly cookies so the client never
- * sees the session token.
+ * in this project. Mode tanpa login: semua request memakai pengguna anonim
+ * dari server (tidak ada session / database).
  */
 
 export interface User {
@@ -33,45 +33,15 @@ function api(path: string, opts: RequestInit = {}) {
 }
 
 export const localApiClient = {
-  // -------- Auth --------
+  // -------- Auth (mode tanpa login — selalu pengguna anonim) --------
   async getUser(): Promise<User | null> {
     try {
       const res = await api('/api/auth/user');
       if (!res.ok) return null;
       const data = (await res.json()) as { user: User };
-      return data.user;
+      return data.user ?? null;
     } catch {
       return null;
-    }
-  },
-
-  async signIn(email: string, password: string): Promise<AuthResponse> {
-    try {
-      const res = await api('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { user: null, error: data.error || 'Login failed' };
-      return { user: data.user };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed';
-      return { user: null, error: message };
-    }
-  },
-
-  async signUp(email: string, password: string, fullName?: string): Promise<AuthResponse> {
-    try {
-      const res = await api('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, full_name: fullName }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { user: null, error: data.error || 'Register failed' };
-      return { user: data.user };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Register failed';
-      return { user: null, error: message };
     }
   },
 

@@ -1,17 +1,11 @@
 /**
- * Server-side session helpers used by App Router layout & pages.
- * These wrap the session module so components don't import it directly.
+ * Server-side session helpers — mode tanpa login.
+ * Pengguna selalu anonim, tanpa cookie/JWT/database.
  */
-import { cookies } from 'next/headers';
-import { verifySession, SessionUser, clearSession as clearCookie } from '@/lib/session';
-
-const TOKEN_KEY = 'randmail_session';
+import { getAnonymousUser, SessionUser, clearSession as clearCookie } from '@/lib/session';
 
 export async function getUser(): Promise<SessionUser | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(TOKEN_KEY)?.value;
-  if (!token) return null;
-  return verifySession(token);
+  return getAnonymousUser();
 }
 
 export async function signOut() {

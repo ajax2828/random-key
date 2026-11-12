@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   generateFormFillerProfile,
   FormFillerProfileOptions,
@@ -10,9 +10,8 @@ import {
 } from '@/lib/formFillerGenerator';
 import Toast from '@/components/Toast';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
-import { NoticeProvider, useNotice } from '@/components/NoticeNotification';
+import { NoticeProvider } from '@/components/NoticeNotification';
 import AiAssistant from '@/components/AiAssistant';
-import { localApiClient } from '@/utils/supabase/client';
 import { trackUsage } from '@/lib/usage';
 
 export default function ToolsPage() {
@@ -73,37 +72,6 @@ export default function ToolsPage() {
     setTimeout(() => setToastMessage(null), 2400);
   };
 
-  const { showNotice } = useNotice();
-
-  // Load profiles from local database on page load
-  useEffect(() => {
-    let ignore = false;
-
-    (async () => {
-      try {
-        const user = await localApiClient.getUser();
-        if (!user || ignore) return;
-
-        const res = await fetch('/api/profiles');
-        if (!res.ok) {
-          console.warn('Profiles fetch notice:', res.status);
-          return;
-        }
-        const { data } = await res.json() as { data: GeneratedProfile[] };
-        if (data && data.length > 0 && !ignore) {
-          setResults(data);
-          setSelectedProfileId(data[0].id);
-        }
-      } catch (err) {
-        console.error('Error loading profiles:', err);
-      }
-    })();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
   const handleToggleField = (field: string) => {
     setActiveFields((prev) => ({
       ...prev,
@@ -111,7 +79,7 @@ export default function ToolsPage() {
     }));
   };
 
-  // Generate & Save Profiles to Supabase
+  // Generate & tampilkan profil (mode tanpa login — tanpa database)
   const handleGenerate = async () => {
     const hasActiveField = Object.values(activeFields).some((val) => val);
     if (!hasActiveField) {
@@ -121,7 +89,6 @@ export default function ToolsPage() {
 
     setIsGenerating(true);
     try {
-      const user = await localApiClient.getUser();
       const generatedList: GeneratedProfile[] = [];
 
       for (let i = 0; i < quantity; i++) {
@@ -130,57 +97,12 @@ export default function ToolsPage() {
         generatedList.push(p);
       }
       trackUsage('tools', 'generate');
-
-      if (user) {
-        // Prepare items for local API insert (no user_id needed — API resolves from session)
-        const toInsert = generatedList.map((item) => ({
-          gender: item.gender,
-          fullname: item.fullname || null,
-          email: item.email || null,
-          password: item.password || null,
-          phone: item.phone || null,
-          birthdate: item.birthdate || null,
-          username: item.username || null,
-          address: item.address || null,
-          job: item.job || null,
-          nik: item.nik || null,
-          hobby: item.hobby || null,
-          education: item.education || null,
-          religion: item.religion || null,
-          form_link: item.form_link || null,
-        }));
-
-        try {
-          const res = await fetch('/api/profiles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(toInsert),
-          });
-          const result = await res.json();
-          if (res.ok && result.data) {
-            showNotice('Data Tersimpan', `Tersimpan ${result.data.length} profil di database!`);
-            setResults((prev) => [...(result.data as GeneratedProfile[]), ...prev]);
-          } else {
-            console.warn('Profile save notice (fallback local):', result.error || 'unknown');
-            showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
-            setResults((prev) => [...generatedList, ...prev]);
-            showToast('Data tidak tersimpan ke database: koneksi tidak tersedia.');
-          }
-        } catch (err) {
-          console.warn('Profile save fallback (local):', err);
-          showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
-          setResults((prev) => [...generatedList, ...prev]);
-          showToast('Data tidak tersimpan ke database: koneksi tidak dapat dijangkau.');
-        }
-      } else {
-        setResults((prev) => [...generatedList, ...prev]);
-        showToast(`Generated ${quantity} data!`);
-        showToast('Data tidak tersimpan ke database: belum login. Log in terlebih dahulu.');
-      }
-
+      setResults((prev) => [...generatedList, ...prev]);
       if (generatedList.length > 0) {
         setSelectedProfileId(generatedList[0].id);
       }
+      showToast(`Generated ${quantity} data!`);
+      showToast('Mode tanpa login: data tidak tersimpan ke database.');
     } catch (err) {
       console.error('Generation error:', err);
       showToast('Gagal generate data');
@@ -323,21 +245,17 @@ export default function ToolsPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      // Delete all profiles from local database
-      await fetch('/api/profiles?all=true', { method: 'DELETE' });
       setResults([]);
       setSelectedProfileId('');
-      showToast('Semua profil berhasil dihapus dari database!');
+      showToast('Semua profil berhasil dihapus!');
     } else {
-      // Delete single profile
       const { id } = deleteTarget;
-      await fetch(`/api/profiles?id=${id}`, { method: 'DELETE' });
       setResults((prev) => prev.filter((p) => p.id !== id));
       if (selectedProfileId === id) {
         const remaining = results.filter((p) => p.id !== id);
         setSelectedProfileId(remaining[0]?.id || '');
       }
-      showToast('Profil berhasil dihapus dari database!');
+      showToast('Profil berhasil dihapus!');
     }
   };
 
@@ -385,12 +303,12 @@ export default function ToolsPage() {
           </div>
           <div>
             <h2 className="page-hero-title">GeneratPro</h2>
-            <p className="page-hero-sub">Generator Profil & Form Auto-Fill — Data tersimpan langsung ke Supabase</p>
+            <p className="page-hero-sub">Generator Profil & Form Auto-Fill — Data langsung muncul di daftar (tanpa database)</p>
           </div>
         </div>
         <div className="page-hero-badges">
           <span className="hero-badge badge-cyan">👤 Form Profiler</span>
-          <span className="hero-badge badge-emerald">💾 Local Database</span>
+          <span className="hero-badge badge-emerald">🆓 Tanpa Database</span>
           <span className="hero-badge badge-violet">🚀 Auto-Fill</span>
         </div>
       </section>
@@ -399,7 +317,7 @@ export default function ToolsPage() {
       <section className="form-link-launcher-card">
         <div className="section-header-row">
           <h3>🔗 Link Form & Auto-Fill Launcher</h3>
-          <span className="info-badge">🚀 Supabase Connected</span>
+          <span className="info-badge">🚀 Auto-Fill</span>
         </div>
 
         <div className="form-launcher-body">
@@ -422,7 +340,7 @@ export default function ToolsPage() {
 
           {results.length > 0 && (
             <div className="profile-select-row">
-              <label htmlFor="select-profile">Pilih Data Profil Supabase:</label>
+              <label htmlFor="select-profile">Pilih Data Profil:</label>
               <select
                 id="select-profile"
                 value={selectedProfileId}
@@ -462,7 +380,7 @@ export default function ToolsPage() {
       <section className="tools-card-section">
         <div className="section-header-row">
           <h3>Konfigurasi & Generator Profil Lokal</h3>
-          <span className="info-badge">💾 Local Database Connected</span>
+          <span className="info-badge">💾 Tanpa Database</span>
         </div>
 
         <div className="fields-grid">
@@ -1009,7 +927,7 @@ export default function ToolsPage() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M5 3l14 9-14 9V3z" />
             </svg>
-            <span>{isGenerating ? 'Menyimpan...' : 'Generate & Simpan Supabase'}</span>
+            <span>{isGenerating ? 'Membuat...' : 'Generate'}</span>
           </button>
 
           <div className="export-btn-group">
@@ -1027,7 +945,7 @@ export default function ToolsPage() {
       <section className="results-section">
         <div className="results-header">
           <div className="results-header-left">
-            <h3>Profil Tersimpan</h3>
+            <h3>Profil Terhasil</h3>
             {results.length > 0 && (
               <span className="results-count-badge">{results.length} profil</span>
             )}
@@ -1060,7 +978,7 @@ export default function ToolsPage() {
                 <path d="M7 8h10M7 12h8M7 16h6" />
               </svg>
             </div>
-            <p>Belum ada data. Silakan pilih field lalu tekan &quot;Generate &amp; Simpan Supabase&quot;.</p>
+            <p>Belum ada data. Silakan pilih field lalu tekan &quot;Generate&quot;.</p>
           </div>
         ) : (
           <div className="profile-cards-list">

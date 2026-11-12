@@ -1,25 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import Toast from '@/components/Toast';
 import SecureDeleteModal from '@/components/SecureDeleteModal';
 import EmailSettings from '@/components/EmailSettings';
 import PasswordSettings from '@/components/PasswordSettings';
 import GenerateControls from '@/components/GenerateControls';
 import ResultsList from '@/components/ResultsList';
-import { NoticeProvider, useNotice } from '@/components/NoticeNotification';
+import { NoticeProvider } from '@/components/NoticeNotification';
 import AiAssistant from '@/components/AiAssistant';
 import { CredentialPair } from '@/components/ResultItem';
-import { localApiClient } from '@/utils/supabase/client';
 import { EmailOptions, PasswordOptions, generateEmail, generatePassword } from '@/lib/generators';
 import { trackUsage } from '@/lib/usage';
-
-interface ApiCredential {
-  id: string;
-  email: string;
-  password: string;
-  created_at: string;
-}
 
 export default function GeneratePage() {
   const [emailOpts, setEmailOpts] = useState<EmailOptions>({
@@ -49,43 +41,10 @@ export default function GeneratePage() {
     setTimeout(() => setToastMessage(null), 2200);
   }, []);
 
-  const { showNotice } = useNotice();
-
-  // Load existing credentials from local API on mount
-  useEffect(() => {
-    let ignore = false;
-
-    (async () => {
-      const user = await localApiClient.getUser();
-      if (!user || ignore) return;
-
-      try {
-        const res = await fetch('/api/accounts');
-        if (!res.ok) return;
-        const { data } = await res.json() as { data: ApiCredential[] };
-        if (!ignore) {
-          setResults(data.map((d) => ({
-            id: d.id,
-            email: d.email,
-            password: d.password,
-            created_at: d.created_at,
-          })));
-        }
-      } catch (err) {
-        console.error('Error fetching credentials:', err);
-      }
-    })();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  // Generate emails & passwords
+  // Generate emails & passwords (mode tanpa login — hasil langsung tersimpan di sesi ini, tanpa database)
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
-      const user = await localApiClient.getUser();
       const generatedList: CredentialPair[] = [];
 
       for (let i = 0; i < quantity; i++) {
@@ -99,40 +58,9 @@ export default function GeneratePage() {
         });
       }
       trackUsage('mail', 'generate');
-
-      if (user) {
-        const toInsert = generatedList.map((item) => ({
-          email: item.email,
-          password: item.password,
-        }));
-
-        try {
-          const res = await fetch('/api/accounts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(toInsert),
-          });
-          const result = await res.json();
-          if (res.ok && result.data) {
-            setResults((prev) => [...result.data, ...prev]);
-            showNotice('Data Tersimpan', `Tersimpan ${result.data.length} pasangan ke database!`);
-          } else {
-            // Fallback to local-only
-            setResults((prev) => [...generatedList, ...prev]);
-            showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
-            showToast('Data tidak tersimpan ke database: koneksi tidak tersedia.');
-          }
-        } catch (err) {
-          console.warn('Save fallback (local):', err);
-          setResults((prev) => [...generatedList, ...prev]);
-          showToast(`Generated ${quantity} data secara lokal! (Notice DB)`);
-          showToast('Data tidak tersimpan ke database: koneksi tidak dapat dijangkau.');
-        }
-      } else {
-        setResults((prev) => [...generatedList, ...prev]);
-        showToast(`Generated ${quantity} pasangan!`);
-        showToast('Data tidak tersimpan ke database: belum login. Log in terlebih dahulu.');
-      }
+      setResults((prev) => [...generatedList, ...prev]);
+      showToast(`Generated ${quantity} pasangan!`);
+      showToast('Mode tanpa login: data tidak tersimpan ke database.');
     } catch (err) {
       console.error('Generation error:', err);
       showToast('Gagal generate data');
@@ -141,7 +69,7 @@ export default function GeneratePage() {
     }
   };
 
-  // Delete handlers
+  // Delete handlers (mode tanpa login — hanya operasi lokal di sesi browser)
   const handleDeleteRequest = (id: string) => {
     const target = results.find((r) => r.id === id);
     if (target) {
@@ -157,15 +85,11 @@ export default function GeneratePage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.mode === 'all') {
-      await fetch('/api/accounts?all=true', { method: 'DELETE' });
       setResults([]);
       showToast('Semua akun email & password berhasil dihapus!');
     } else {
       const { id } = deleteTarget;
       setResults((prev) => prev.filter((item) => item.id !== id));
-      if (!id.startsWith('local-')) {
-        await fetch(`/api/accounts?id=${id}`, { method: 'DELETE' });
-      }
       showToast('Akun email & password berhasil dihapus!');
     }
   };
@@ -216,13 +140,13 @@ export default function GeneratePage() {
           </div>
           <div>
             <h2 className="page-hero-title">GeneratMail</h2>
-            <p className="page-hero-sub">Generate email & password acak — langsung tersimpan ke database lokal</p>
+            <p className="page-hero-sub">Generate email & password acak — langsung muncul di hasil (tanpa database)</p>
           </div>
         </div>
         <div className="page-hero-badges">
           <span className="hero-badge" style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>✉️ Email</span>
           <span className="hero-badge" style={{ background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#06b6d4' }}>🔐 Password</span>
-          <span className="hero-badge" style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }}>💾 Local DB</span>
+          <span className="hero-badge" style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }}>🆓 Tanpa Database</span>
         </div>
       </section>
 

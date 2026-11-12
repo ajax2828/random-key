@@ -3,11 +3,19 @@
 Generator acak berbasis web: email & password, password vault, profil form-filler,
 nota penjualan (Invoc), sertifikat, dan dokumen ber-kopsurat.
 
+## Mode
+
+Aplikasi berjalan di **mode tanpa login & tanpa database**:
+
+- **Tidak ada login** — semua halaman (termasuk dashboard, generator, history) bisa
+  langsung dibuka tanpa autentikasi. Tidak ada halaman /login atau /register.
+- **Tidak ada database** — tidak ada penyimpanan ke PostgreSQL/Supabase. Hasil generate
+  disimpan sementara di sesi browser (localStorage untuk vault, state untuk hasil
+  generate) dan tidak pernah masuk ke database.
+
 ## Stack
 
 - Next.js 16 (App Router, Turbopack) + React 19 + TypeScript
-- PostgreSQL lokal (`pg`) sebagai database utama; Supabase sebagai opsi provider data
-- Auth: JWT + cookie httpOnly, password di-hash bcrypt
 - AI assistant: OpenAI / Anthropic / Gemini / Groq / DeepSeek / Mistral / xAI /
   OpenRouter / Ollama / LM Studio / Custom (OpenAI-compatible), dengan mode
   panduan offline bila API key belum diisi
@@ -16,26 +24,23 @@ nota penjualan (Invoc), sertifikat, dan dokumen ber-kopsurat.
 
 ```
 src/app/              Halaman & API route
-  dashboard/          Ringkasan, monitoring, koneksi DB & AI, cleanup
+  dashboard/          Ringkasan, monitoring, quick links
   dashboard/generate  GeneratMail (email + password acak)
-  pass/               GeneratPass (password vault)
+  pass/               GeneratPass (password vault lokal)
   tools/              GeneratPro (profil + autofill form)
-  nota/               Invoc (nota penjualan)
+  nota/               GeneratNota (nota penjualan)
   sertif/             GeneratSertif (sertifikat dari daftar nama)
   doc/                GeneratDoc (dokumen + kopsurat)
-  history/            Riwayat gabungan
-  api/                accounts, vault, profiles, auth/*, admin/*, health, usage, ai/chat
-src/components/       Navbar, AuthForm, AiAssistant, NoticePopup, modal verifikasi, dsb.
-src/lib/              db, dataProvider, session, ai, usage, schema.sql, generator
+  history/            Riwayat (kosong — tanpa penyimpanan backend)
+  api/                accounts, vault, profiles, auth/user, auth/logout, health, usage, ai/chat
+src/components/       Navbar, AiAssistant, modal verifikasi captcha, dsb.
+src/lib/              session, ai, usage, generators, dsb.
 ```
 
 ## Menjalankan
 
-### Lokal
-
 ```bash
 npm install
-npm run db:setup     # buat tabel dari src/lib/schema.sql (butuh DATABASE_URL)
 npm run dev
 ```
 
@@ -47,20 +52,14 @@ Buka http://localhost:3000
 docker compose up -d
 ```
 
-Layanan: http://localhost:9012 (db Postgres di port 5432).
+Layanan: http://localhost:9012
 
 ## Variabel Lingkungan
 
-Lihat `.env.example`. Nilai yang dipakai:
+Tidak ada lagi variabel database (DATABASE_URL / JWT_SECRET) yang wajib.
+Sisa konfigurasi AI bisa lewat environment (`AI_PROVIDER`, `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`).
 
-| Variabel | Fungsi |
-| --- | --- |
-| `DATABASE_URL` | Koneksi PostgreSQL (host/port/user/password/database) |
-| `JWT_SECRET` | Kunci penandatanganan token sesi |
-| `AI_PROVIDER` / `AI_MODEL` / `AI_BASE_URL` / `AI_API_KEY` | Override opsional kunci AI dari environment |
-
-Koneksi database & kunci AI juga bisa diatur lewat Dashboard → Koneksi Database & AI
-(tersimpan di tabel `app_settings`).
+Lihat `.env.example`.
 
 ## Script
 
@@ -70,9 +69,10 @@ Koneksi database & kunci AI juga bisa diatur lewat Dashboard → Koneksi Databas
 | `npm run build` | Build produksi |
 | `npm run start` | Jalankan hasil build |
 | `npm run lint` | ESLint |
-| `npm run db:setup` | Terapkan `src/lib/schema.sql` ke database |
+| `npm run db:setup` | Tidak diperlukan (tidak ada database) |
 
-## Mode Demo
+## Catatan
 
-Halaman login menyediakan kredensial demo (akun demo tanpa baris di database),
-berguna untuk mencoba aplikasi saat PostgreSQL belum tersedia.
+- Semua endpoint API publik (`/api/*`) kini beroperasi tanpa autentikasi & tanpa
+  database (mengembalikan data kosong / mode offline).
+- Verifikasi keamanan (captcha) tetap dipakai untuk aksi generasi/hapus.

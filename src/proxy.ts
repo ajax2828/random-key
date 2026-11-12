@@ -1,8 +1,11 @@
-import { type NextRequest } from 'next/server';
-import { middlewareUpdateSession } from '@/lib/session';
+import { type NextRequest, NextResponse } from 'next/server';
 
+/**
+ * Proxy/middleware — mode tanpa login & tanpa database.
+ * Semua request lolos tanpa redirect atau verifikasi.
+ */
 export async function proxy(request: NextRequest) {
-  return middlewareUpdateSession(request);
+  return NextResponse.next({ request });
 }
 
 export const config = {
